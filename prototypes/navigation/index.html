@@ -1,0 +1,417 @@
+<!doctype html>
+<!--
+  PROTOTYPE, vứt đi sau khi chốt. Không merge vào main.
+  Câu hỏi: app MVP có những màn hình nào và người mới đi giữa chúng thế nào (ticket "Màn hình và luồng điều hướng tổng thể").
+  Ba biến thể khung điều hướng, đổi bằng ?variant=A|B|C hoặc thanh nổi phía dưới (phím ← →).
+  Nút 📱/🖥 trên thanh nổi ép khung điện thoại 390px để so sánh trên máy tính.
+  Dữ liệu là giả, không lưu gì. Bàn cờ chỉ là hình minh họa (đã chốt riêng ở "Giao diện bàn cờ SVG").
+-->
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype: điều hướng</title>
+<style>
+  :root { --bg:#f6f3ec; --card:#fff; --ink:#222; --mute:#777; --line:#e2dccf; --acc:#2f6f4f; --acc2:#e9f3ee; --wood:#dcb35c; --warn:#c0392b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui, sans-serif; background:#cfc8b8; color:var(--ink); }
+  button { font:inherit; cursor:pointer; border:1px solid var(--line); background:var(--card); border-radius:10px; padding:8px 14px; color:inherit; }
+  button.pri { background:var(--acc); color:#fff; border-color:var(--acc); }
+  button.ghost { border-color:transparent; background:transparent; }
+  h1,h2,h3 { margin:0 0 8px; } h1 { font-size:22px; } h2 { font-size:18px; } h3 { font-size:15px; }
+  .mute { color:var(--mute); font-size:13px; }
+  #stage { min-height:100vh; display:flex; justify-content:center; align-items:flex-start; }
+  #app { container-type:inline-size; width:100%; min-height:100vh; background:var(--bg); position:relative; }
+  body.phone #stage { padding:24px 0 90px; }
+  body.phone #app { width:390px; height:780px; min-height:0; overflow:auto; border-radius:28px; border:10px solid #222; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .row { display:flex; gap:10px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:10px; }
+  .grow { flex:1; }
+  .pad { padding:16px; }
+  .chip { display:inline-block; font-size:12px; padding:2px 8px; border-radius:99px; background:var(--acc2); color:var(--acc); }
+  .chip.run { background:#fff3d6; color:#8a5a00; } .chip.new { background:#eee; color:#666; }
+  .bar { height:6px; background:#eee; border-radius:3px; overflow:hidden; } .bar > i { display:block; height:100%; background:var(--acc); }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(44px, 1fr)); gap:6px; }
+  .tile { aspect-ratio:1; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:12px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  .tile.r1 { background:#f4f4f4; } .tile.r2 { background:#e6e6e6; } .tile.r3 { background:#cfe6da; } .tile.r4 { background:#7fbf9c; color:#fff; } .tile.r5 { background:var(--acc); color:#fff; }
+  .seg { display:flex; gap:4px; overflow-x:auto; } .seg button { padding:6px 12px; white-space:nowrap; } .seg button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .board { width:100%; max-width:440px; display:block; margin:0 auto; }
+  .split { display:flex; flex-direction:column; gap:14px; }
+  @container (min-width:760px) { .split { flex-direction:row; align-items:flex-start; } .split > .board-wrap { flex:0 0 440px; } .split > .side { flex:1; } }
+  .topbar { display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  .topbar .title { font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .legend span { display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-size:12px; } .legend i { width:12px; height:12px; border-radius:3px; display:inline-block; border:1px solid var(--line); }
+  .list-item { display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid var(--line); cursor:pointer; background:var(--card); }
+  .list-item:first-child { border-radius:14px 14px 0 0; } .list-item:last-child { border-bottom:0; border-radius:0 0 14px 14px; }
+  .list { border:1px solid var(--line); border-radius:14px; }
+  .num { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#eee; font-weight:600; font-size:13px; flex:none; }
+  .num.done { background:var(--acc); color:#fff; } .num.run { background:#f0b429; color:#fff; }
+  .modal-bg { position:absolute; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:20; }
+  .sheet { background:var(--card); width:100%; max-width:520px; border-radius:18px 18px 0 0; padding:18px; }
+  @container (min-width:760px) { .modal-bg { align-items:center; } .sheet { border-radius:18px; } }
+
+  /* Variant A: tab bar dưới (hẹp) / sidebar trái (rộng) */
+  .A-shell { display:flex; flex-direction:column; min-height:100%; }
+  .A-main { flex:1; padding-bottom:70px; }
+  .A-tabs { position:sticky; bottom:0; display:flex; background:var(--card); border-top:1px solid var(--line); z-index:6; }
+  .A-tabs button { flex:1; border:0; border-radius:0; padding:8px 0 10px; display:flex; flex-direction:column; align-items:center; font-size:12px; background:transparent; color:var(--mute); }
+  .A-tabs button b { font-size:20px; font-weight:400; } .A-tabs button.on { color:var(--acc); font-weight:600; }
+  @container (min-width:760px) {
+    .A-shell { flex-direction:row-reverse; }
+    .A-main { padding-bottom:0; }
+    .A-tabs { position:sticky; top:0; height:100vh; flex-direction:column; width:200px; border-top:0; border-right:1px solid var(--line); padding:16px 8px; gap:4px; justify-content:flex-start; }
+    .A-tabs button { flex:none; flex-direction:row; gap:10px; padding:10px 12px; font-size:15px; border-radius:10px; }
+    .A-tabs button.on { background:var(--acc2); }
+    .A-tabs .brand { display:block !important; }
+  }
+
+  /* Variant B: lộ trình */
+  .B-path { position:relative; padding:8px 0 30px; }
+  .B-node { display:flex; align-items:center; gap:14px; margin:0 0 18px; }
+  .B-dot { width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; flex:none; border:3px solid var(--line); background:#fff; cursor:pointer; }
+  .B-dot.done { background:var(--acc); border-color:var(--acc); color:#fff; } .B-dot.cur { border-color:#f0b429; box-shadow:0 0 0 6px #f0b42933; } .B-dot.later { opacity:.55; }
+  .B-dot.ts { width:44px; height:44px; font-size:16px; margin-left:6px; border-style:dashed; }
+  .B-line { position:absolute; left:43px; top:30px; bottom:40px; width:3px; background:var(--line); z-index:0; } .B-node > * { position:relative; z-index:1; }
+  .B-cols { display:block; } @container (min-width:760px) { .B-cols { display:grid; grid-template-columns:1fr 320px; gap:24px; align-items:start; } }
+
+  /* Variant C: hub */
+  .C-hero { display:grid; gap:12px; }
+  .C-big { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .C-big .card { cursor:pointer; min-height:110px; display:flex; flex-direction:column; justify-content:space-between; }
+  .C-big .card b { font-size:28px; }
+  @container (min-width:760px) { .C-hero { grid-template-columns:1fr 1.3fr; align-items:start; } .C-big { grid-template-columns:1fr 1fr; } }
+  .crumbs { font-size:12px; color:var(--mute); }
+
+  /* thanh nổi của prototype, không thuộc thiết kế */
+  #pt-bar { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#111; color:#fff; border-radius:99px; display:flex; align-items:center; gap:6px; padding:6px 8px; box-shadow:0 6px 24px #0007; z-index:100; font-size:13px; }
+  #pt-bar button { background:#333; color:#fff; border:0; border-radius:99px; padding:6px 12px; }
+  #pt-bar .lbl { padding:0 8px; white-space:nowrap; }
+  #pt-state { position:fixed; top:8px; right:8px; background:#111e; color:#9fe; font:11px/1.4 ui-monospace, monospace; padding:8px 10px; border-radius:8px; z-index:100; max-width:300px; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="app"></div></div>
+<div id="pt-bar">
+  <button id="pt-prev">◀</button><span class="lbl" id="pt-lbl"></span><button id="pt-next">▶</button>
+  <button id="pt-frame" title="Khung điện thoại">📱</button>
+  <button id="pt-st" title="Hiện state">{ }</button>
+</div>
+<pre id="pt-state" hidden></pre>
+<script>
+// ---------- dữ liệu giả ----------
+const LESSONS = [
+  { id:'ban-co', t:'Bàn cờ và cách đặt quân', st:'done', steps:5 },
+  { id:'khi', t:'Khí', st:'done', steps:6 },
+  { id:'bat-quan', t:'Bắt quân', st:'run', step:3, steps:7 },
+  { id:'tu-sat', t:'Điểm cấm và tự sát', st:'new', steps:6 },
+  { id:'ko', t:'Ko', st:'new', steps:8 },
+  { id:'mat', t:'Mắt, sống và chết', st:'new', steps:9 },
+  { id:'ket-thuc', t:'Kết thúc ván và quân chết', st:'new', steps:6 },
+  { id:'dem-diem', t:'Đếm điểm', st:'new', steps:7 },
+];
+const DIFF = [
+  { d:1, t:'Bắt quân một nước' }, { d:2, t:'Bắt quân vài nước' }, { d:3, t:'Sống chết cơ bản' },
+  { d:4, t:'Sống chết có nước lừa' }, { d:5, t:'Thử thách' },
+];
+// hạng: 0 Chưa thử, 1 Đã thử, 2 Đã xem đáp án, 3 Giải được, 4 Đúng ngay lần đầu
+const RANK = ['Chưa thử','Đã thử','Đã xem đáp án','Giải được','Đúng ngay lần đầu'];
+const TSUMEGO = [];
+for (const { d } of DIFF) for (let i = 1; i <= 24; i++) {
+  const r = d === 1 ? (i <= 14 ? (i % 3 ? 4 : 3) : i === 15 ? 1 : 0) : d === 2 ? (i <= 4 ? 3 : i === 5 ? 2 : 0) : 0;
+  TSUMEGO.push({ id:`d${d}-${i}`, d, n:i, r });
+}
+const SAVED = { ai:{ size:9, moves:24, level:'Mức 2' }, local:null };
+const Goal = ['Đen đi, bắt quân', 'Đen đi, sống', 'Đen đi, giết'];
+
+const lessonById = id => LESSONS.find(l => l.id === id);
+const tsById = id => TSUMEGO.find(t => t.id === id);
+const nextLesson = () => LESSONS.find(l => l.st !== 'done');
+const nextTs = d => TSUMEGO.find(t => (!d || t.d === d) && t.r < 3);
+const solved = d => TSUMEGO.filter(t => t.d === d && t.r >= 3).length;
+
+// ---------- bàn cờ minh họa ----------
+function board(n = 9, seed = 1) {
+  const c = 24, pad = 20, w = pad * 2 + c * (n - 1);
+  let s = `<svg class="board" viewBox="0 0 ${w} ${w}"><rect width="${w}" height="${w}" rx="6" fill="#dcb35c"/>`;
+  for (let i = 0; i < n; i++) {
+    const p = pad + i * c;
+    s += `<line x1="${pad}" y1="${p}" x2="${w - pad}" y2="${p}" stroke="#5a4320"/><line x1="${p}" y1="${pad}" x2="${p}" y2="${w - pad}" stroke="#5a4320"/>`;
+  }
+  let x = seed * 7;
+  for (let k = 0; k < 10; k++) {
+    x = (x * 37 + 11) % (n * n);
+    const cx = pad + (x % n) * c, cy = pad + Math.floor(x / n) * c;
+    s += `<circle cx="${cx}" cy="${cy}" r="${c * 0.46}" fill="${k % 2 ? '#f8f8f8' : '#151515'}" stroke="#0005"/>`;
+  }
+  return s + '</svg>';
+}
+
+// ---------- điều hướng (stack trong bộ nhớ) ----------
+const params = new URLSearchParams(location.search);
+const VARIANTS = ['A','B','C','D'];
+let variant = VARIANTS.includes(params.get('variant')) ? params.get('variant') : 'D';
+let stack, modal = null, diffSel = 1;
+const resetStack = () => { stack = [{ s: V().root }]; modal = null; };
+const top_ = () => stack[stack.length - 1];
+function go(r) { stack.push(r); modal = null; render(); }
+function back() { if (stack.length > 1) stack.pop(); modal = null; render(); }
+function root(r) { stack = [r]; modal = null; render(); }
+function parse(str) { const [s, a] = str.split(':'); return { s, a }; }
+
+// ---------- màn hình nội dung (giống nhau giữa các biến thể) ----------
+function lessonScreen(r) {
+  const l = lessonById(r.a); const step = l.st === 'run' ? l.step : 1;
+  return `<div class="split pad">
+    <div class="board-wrap">${board(9, step + 2)}</div>
+    <div class="side col">
+      <div class="mute">Bài học · Bước ${step}/${l.steps} · ${step === 3 ? 'Practice' : 'Explanation'}</div>
+      <div class="bar"><i style="width:${(step / l.steps) * 100}%"></i></div>
+      <h2>${l.t}</h2>
+      <p>${step === 3 ? 'Đến lượt bạn: hãy bắt nhóm quân trắng có đánh dấu.' : 'Mỗi quân có các khí là những điểm trống kề bên nó theo hàng và cột.'}</p>
+      <div class="row"><button>Xem đáp án</button><span class="grow"></span><button class="pri" data-go="lessonDone:${l.id}">Tiếp ▸</button></div>
+      <p class="mute">Thoát giữa chừng thì Lesson run được lưu, lần sau mở lại đúng bước này.</p>
+    </div></div>`;
+}
+function lessonDoneScreen(r) {
+  const l = lessonById(r.a); const i = LESSONS.indexOf(l); const nx = LESSONS[i + 1];
+  return `<div class="pad col" style="max-width:520px;margin:0 auto;text-align:center">
+    <div style="font-size:48px">🎉</div><h1>Xong bài "${l.t}"</h1>
+    <p class="mute">Practice: 2 đúng ngay lần đầu, 1 đúng ở lần thử 2</p>
+    ${nx ? `<button class="pri" data-replace="lesson:${nx.id}">Bài tiếp: ${nx.t}</button>` : ''}
+    <button data-replace="tsList:1">Luyện Tsumego liên quan</button>
+    <button data-home>Về ${V().homeName}</button></div>`;
+}
+function tsScreen(r) {
+  const t = tsById(r.a);
+  return `<div class="split pad">
+    <div class="board-wrap">${board(9, t.n + t.d * 3)}</div>
+    <div class="side col">
+      <div class="mute">Tsumego · Difficulty ${t.d} · Bài ${t.n}/24</div>
+      <h2>${Goal[(t.n + t.d) % 3]}</h2>
+      <div><span class="chip">${RANK[t.r]}</span></div>
+      <p class="mute">Gợi ý luật tắt trong Tsumego. Đi sai thì đối phương phản đòn, rồi chọn Thử lại.</p>
+      <div class="row"><button>Thử lại</button><button>Xem đáp án</button><span class="grow"></span>
+        ${t.n < 24 ? `<button class="pri" data-replace="ts:d${t.d}-${t.n + 1}">Bài tiếp ▸</button>` : ''}</div>
+    </div></div>`;
+}
+function setupScreen(r) {
+  const ai = r.a === 'ai'; const saved = SAVED[r.a];
+  return `<div class="pad col" style="max-width:520px">
+    ${saved ? `<div class="card col"><b>Ván đang dở</b><span class="mute">Bàn ${saved.size}×${saved.size} · ${saved.moves} nước · ${saved.level}</span>
+      <div class="row"><button class="pri grow" data-replace="game:${r.a}">Chơi tiếp</button><button>Bỏ ván này</button></div></div>
+      <p class="mute">Bắt đầu ván mới sẽ thay thế ván đang dở (có hỏi xác nhận).</p>` : ''}
+    <h2>${saved ? 'Hoặc ván mới' : 'Ván mới'}</h2>
+    <div class="card col">
+      <div>Kích thước bàn<div class="seg"><button class="on">9×9</button><button>13×13</button><button>19×19</button></div></div>
+      ${ai ? `<div>Bạn cầm<div class="seg"><button class="on">Đen</button><button>Trắng</button><button>Ngẫu nhiên</button></div></div>
+      <div>Mức AI <span class="mute">(chốt ở "Port AI opponent và mức độ khó")</span><div class="seg"><button>1</button><button class="on">2</button><button>3</button><button>4</button><button>5</button></div></div>` : ''}
+      <details><summary class="mute">Tùy chọn nâng cao: Komi, Handicap</summary>
+        <div class="col" style="margin-top:8px"><div>Komi <div class="seg"><button class="on">7,5</button><button>0,5</button><button>6,5</button></div></div>
+        <div>Handicap <div class="seg"><button class="on">0</button><button>2</button><button>3</button><button>4</button><button>…9</button></div></div></div></details>
+    </div>
+    <button class="pri" data-replace="game:${r.a}">Bắt đầu</button></div>`;
+}
+function gameScreen(r) {
+  return `<div class="split pad">
+    <div class="board-wrap">${board(9, 5)}</div>
+    <div class="side col">
+      <div class="card col"><div class="row"><b class="grow">${r.a === 'ai' ? 'Bạn (Đen) vs AI mức 2' : 'Đen vs Trắng, cùng máy'}</b><span class="chip">Lượt Đen</span></div>
+      <div class="mute">Captures: Đen 3 · Trắng 1</div></div>
+      <div class="card mute" style="max-height:120px;overflow:auto">Nhật ký: 22. Đen D5 · 23. Trắng E5 bắt 1 · 24. Đen E6 …</div>
+      <div class="row"><button>Bỏ lượt</button><button>Undo</button><span class="grow"></span><button data-modal="resign">Xin thua</button></div>
+      <p class="mute">Thoát ra lúc nào cũng được, ván được lưu tự động.</p>
+    </div></div>`;
+}
+function settingsScreen() {
+  return `<div class="pad col" style="max-width:560px">
+    <div class="card col"><b>Ngôn ngữ</b><div class="seg"><button class="on">Tiếng Việt</button><button>English</button></div></div>
+    <div class="card col"><b>Âm thanh</b><label><input type="checkbox" checked> Tiếng đặt quân</label></div>
+    <div class="card col"><b>Tiến độ học</b><span class="mute">Lưu trên trình duyệt này. Xuất ra file để giữ hoặc chuyển máy.</span>
+      <div class="row"><button>Xuất JSON</button><button>Nhập JSON</button></div>
+      <button style="color:var(--warn)" data-modal="wipe">Xóa toàn bộ tiến độ</button></div>
+    <div class="card col"><b>Giới thiệu</b><span class="mute">Mã nguồn mở. Bộ Tsumego CC0. AI: KataGo.</span></div></div>`;
+}
+const CONTENT = { lesson:lessonScreen, lessonDone:lessonDoneScreen, ts:tsScreen, setup:setupScreen, game:gameScreen, settings:settingsScreen };
+const TITLES = {
+  lesson: r => lessonById(r.a).t, lessonDone: () => 'Hoàn thành', ts: r => `Tsumego ${tsById(r.a).d}·${tsById(r.a).n}`,
+  setup: r => r.a === 'ai' ? 'Chơi với AI' : 'Hai người cùng máy', game: r => r.a === 'ai' ? 'Ván với AI' : 'Ván hai người',
+  settings: () => 'Cài đặt', lessons: () => 'Bài học', tsList: () => 'Tsumego', play: () => 'Chơi', home: () => 'Trang chủ', path: () => 'Lộ trình',
+};
+const MODALS = {
+  resign: `<h2>Xin thua?</h2><p class="mute">Ván kết thúc, Game result: Trắng thắng do Resign. Ván dở bị xóa.</p>
+    <div class="row"><button data-close>Hủy</button><span class="grow"></span><button class="pri" data-home>Xin thua</button></div>`,
+  wipe: `<h2>Xóa toàn bộ tiến độ?</h2><p class="mute">Không hoàn tác được. Nên xuất JSON trước.</p>
+    <div class="row"><button data-close>Hủy</button><button>Xuất trước</button><span class="grow"></span><button style="background:var(--warn);color:#fff" data-close>Xóa</button></div>`,
+  play: `<h2>Chơi</h2><div class="col">
+    <button class="pri" data-go="setup:ai">🤖 Chơi với AI ${SAVED.ai ? '<span class="mute" style="color:#fff">· có ván dở</span>' : ''}</button>
+    <button data-go="setup:local">👥 Hai người cùng máy</button><button data-close>Đóng</button></div>`,
+};
+
+// ---------- danh sách dùng chung ----------
+function lessonList() {
+  return `<div class="list">${LESSONS.map((l, i) => `<div class="list-item" data-go="lesson:${l.id}">
+    <span class="num ${l.st}">${l.st === 'done' ? '✓' : i + 1}</span>
+    <div class="grow"><div>${l.t}</div>${l.st === 'run' ? `<div class="mute">Đang học: bước ${l.step}/${l.steps}</div>` : ''}</div>
+    <span class="chip ${l.st}">${l.st === 'done' ? 'Xong' : l.st === 'run' ? 'Đang học' : 'Chưa học'}</span></div>`).join('')}</div>`;
+}
+const legend = `<div class="legend">${RANK.map((t, i) => `<span><i class="tile r${i + 1}" style="aspect-ratio:auto"></i>${t}</span>`).join('')}</div>`;
+const tiles = d => `<div class="tiles">${TSUMEGO.filter(t => t.d === d).map(t => `<div class="tile r${t.r + 1}" data-go="ts:${t.id}" title="${RANK[t.r]}">${t.n}</div>`).join('')}</div>`;
+
+// ================= BIẾN THỂ A: 4 tab cố định =================
+const VA = {
+  name:'Tab bar 4 mục', root:'lessons', homeName:'Bài học',
+  render() {
+    const r = top_(); const tabs = ['lessons','tsList','play','settings'];
+    if (!tabs.includes(r.s)) // vào nội dung: ẩn tab, chế độ tập trung
+      return `<div class="topbar"><button class="ghost" data-back>✕</button><span class="title">${TITLES[r.s](r)}</span></div>${CONTENT[r.s](r)}`;
+    const body = {
+      lessons: () => `<h1>Bài học</h1><p class="mute">Học lần lượt từ trên xuống. 2/8 bài đã xong.</p>${lessonList()}`,
+      tsList: () => `<h1>Tsumego</h1><div class="seg" style="margin-bottom:10px">${DIFF.map(x => `<button class="${diffSel === x.d ? 'on' : ''}" data-diff="${x.d}">Mức ${x.d} · ${solved(x.d)}/24</button>`).join('')}</div>
+        <p class="mute">${DIFF[diffSel - 1].t}</p>${tiles(diffSel)}<div style="margin-top:10px">${legend}</div>
+        ${nextTs(diffSel) ? `<button class="pri" style="margin-top:12px" data-go="ts:${nextTs(diffSel).id}">Làm bài chưa giải tiếp theo</button>` : ''}`,
+      play: () => `<h1>Chơi</h1><div class="col">
+        <div class="card col" data-go="setup:ai" style="cursor:pointer"><h2>🤖 Chơi với AI</h2>${SAVED.ai ? `<span class="chip run">Có ván dở · ${SAVED.ai.moves} nước</span>` : '<span class="mute">Chưa có ván dở</span>'}</div>
+        <div class="card col" data-go="setup:local" style="cursor:pointer"><h2>👥 Hai người cùng máy</h2><span class="mute">Chưa có ván dở</span></div></div>`,
+      settings: () => `<h1>Cài đặt</h1>${settingsScreen().replace('class="pad col"', 'class="col"')}`,
+    }[r.s]();
+    const ic = { lessons:['📖','Học'], tsList:['🧩','Tsumego'], play:['⚫','Chơi'], settings:['⚙','Cài đặt'] };
+    return `<div class="A-shell"><div class="A-main pad">${body}</div>
+      <nav class="A-tabs"><div class="brand pad" style="display:none"><b>Cờ Vây</b></div>${tabs.map(t => `<button class="${r.s === t ? 'on' : ''}" data-root="${t}"><b>${ic[t][0]}</b>${ic[t][1]}</button>`).join('')}</nav></div>`;
+  },
+};
+
+// ================= BIẾN THỂ B: lộ trình, một nút chính =================
+const VB = {
+  name:'Lộ trình học', root:'path', homeName:'Lộ trình',
+  render() {
+    const r = top_();
+    const head = r.s === 'path'
+      ? `<div class="topbar"><span class="title">Cờ Vây</span><button data-modal="play">⚫ Chơi</button><button class="ghost" data-go="settings">⚙</button></div>`
+      : `<div class="topbar"><button class="ghost" data-back>‹ Lộ trình</button><span class="title">${TITLES[r.s](r)}</span></div>`;
+    if (r.s === 'tsList') return head + `<div class="pad col"><h1>Kho Tsumego</h1>${legend}${DIFF.map(x => `<div class="col"><h3>Mức ${x.d}: ${x.t} <span class="mute">${solved(x.d)}/24</span></h3>${tiles(x.d)}</div>`).join('')}</div>`;
+    if (r.s !== 'path') return head + CONTENT[r.s](r);
+    const nl = nextLesson();
+    const side = `<div class="col">
+      <div class="card col"><b>Tiếp tục</b><div>${nl.t}</div><div class="bar"><i style="width:${nl.st === 'run' ? (nl.step / nl.steps) * 100 : 0}%"></i></div>
+        <button class="pri" data-go="lesson:${nl.id}">Học tiếp ▸</button></div>
+      ${SAVED.ai ? `<div class="card row"><div class="grow"><b>Ván dở với AI</b><div class="mute">${SAVED.ai.moves} nước · ${SAVED.ai.level}</div></div><button data-go="game:ai">Chơi tiếp</button></div>` : ''}
+      <button data-go="tsList">🧩 Kho Tsumego (120 bài)</button></div>`;
+    return head + `<div class="pad B-cols"><div><h1>Lộ trình của bạn</h1><p class="mute">Không khóa bài nào, nhưng nên đi theo thứ tự.</p>
+      ${pathNodes()}</div>${side}</div>`;
+  },
+};
+function pathNodes() {
+    const nl = nextLesson();
+    let nodes = '';
+    LESSONS.forEach((l, i) => {
+      const cls = l.st === 'done' ? 'done' : l === nl ? 'cur' : 'later';
+      nodes += `<div class="B-node"><div class="B-dot ${cls}" data-go="lesson:${l.id}">${l.st === 'done' ? '✓' : i + 1}</div>
+        <div><div><b>${l.t}</b></div><div class="mute">${l.st === 'run' ? `Đang học bước ${l.step}/${l.steps}` : l.st === 'done' ? 'Đã xong' : `${l.steps} bước`}</div></div></div>`;
+      if (i < 5) { const d = Math.min(5, Math.floor(i / 1.2) + 1); const s = solved(d);
+        nodes += `<div class="B-node"><div class="B-dot ts ${l.st === 'done' ? (s >= 5 ? 'done' : 'cur') : 'later'}" data-go="ts:${nextTs(d)?.id ?? `d${d}-1`}">🧩</div>
+        <div class="mute">Luyện 5 Tsumego mức ${d} · ${Math.min(s, 5)}/5</div></div>`; }
+    });
+    return `<div class="B-path"><div class="B-line"></div>${nodes}</div>`;
+}
+
+// ================= BIẾN THỂ C: trang chủ hub + stack =================
+const VC = {
+  name:'Trang chủ hub', root:'home', homeName:'Trang chủ',
+  render() {
+    const r = top_();
+    const crumbs = stack.map(x => TITLES[x.s](x)).join(' › ');
+    const head = r.s === 'home'
+      ? `<div class="topbar"><span class="title">Cờ Vây</span><button class="ghost" data-go="settings">⚙ Cài đặt</button></div>`
+      : `<div class="topbar"><button class="ghost" data-back>←</button><div class="title">${TITLES[r.s](r)}<div class="crumbs">${crumbs}</div></div><button class="ghost" data-home>⌂</button></div>`;
+    if (r.s === 'lessons') return head + `<div class="pad">${lessonList()}</div>`;
+    if (r.s === 'tsList') return head + `<div class="pad col">${legend}<div class="list">${DIFF.map(x => `<div class="list-item" data-go="tsDiff:${x.d}">
+      <span class="num">${x.d}</span><div class="grow"><div>${x.t}</div><div class="bar" style="margin-top:6px"><i style="width:${solved(x.d) / 24 * 100}%"></i></div></div><span class="mute">${solved(x.d)}/24 ›</span></div>`).join('')}</div></div>`;
+    if (r.s === 'tsDiff') { const d = +r.a; return head + `<div class="pad col"><h2>Mức ${d}: ${DIFF[d - 1].t}</h2>${tiles(d)}${legend}</div>`; }
+    if (r.s !== 'home') return head + CONTENT[r.s](r);
+    const nl = nextLesson(), nt = nextTs();
+    return head + `<div class="pad C-hero">
+      <div class="col"><h1>Chào bạn 👋</h1><div class="card col"><b>Tiếp tục</b>
+        <div class="list-item" data-go="lesson:${nl.id}" style="border:0;padding:8px 0"><span class="num run">📖</span><div class="grow">${nl.t}<div class="mute">Bước ${nl.step ?? 1}/${nl.steps}</div></div>›</div>
+        ${SAVED.ai ? `<div class="list-item" data-go="game:ai" style="border:0;padding:8px 0"><span class="num">🤖</span><div class="grow">Ván dở với AI<div class="mute">${SAVED.ai.moves} nước · ${SAVED.ai.level}</div></div>›</div>` : ''}
+        <div class="list-item" data-go="ts:${nt.id}" style="border:0;padding:8px 0"><span class="num">🧩</span><div class="grow">Tsumego mức ${nt.d}, bài ${nt.n}<div class="mute">Bài chưa giải tiếp theo</div></div>›</div></div></div>
+      <div class="C-big">
+        <div class="card" data-go="lessons"><b>📖</b><div><h3>Bài học</h3><span class="mute">2/8 xong</span></div></div>
+        <div class="card" data-go="tsList"><b>🧩</b><div><h3>Tsumego</h3><span class="mute">${TSUMEGO.filter(t => t.r >= 3).length}/120 giải được</span></div></div>
+        <div class="card" data-go="setup:ai"><b>🤖</b><div><h3>Chơi với AI</h3><span class="mute">${SAVED.ai ? 'Có ván dở' : 'Ván mới'}</span></div></div>
+        <div class="card" data-go="setup:local"><b>👥</b><div><h3>Hai người</h3><span class="mute">Cùng một máy</span></div></div>
+      </div></div>`;
+  },
+};
+
+// ================= BIẾN THỂ D: khung C + lộ trình của B =================
+const VD = {
+  name:'Hub C + lộ trình B (đã chọn)', root:'home', homeName:'Trang chủ',
+  render() {
+    const r = top_();
+    const crumbs = stack.map(x => TITLES[x.s](x)).join(' › ');
+    const head = r.s === 'home'
+      ? `<div class="topbar"><span class="title">Cờ Vây</span><button class="ghost" data-go="settings">⚙ Cài đặt</button></div>`
+      : `<div class="topbar"><button class="ghost" data-back>←</button><div class="title">${TITLES[r.s](r)}<div class="crumbs">${crumbs}</div></div><button class="ghost" data-home>⌂</button></div>`;
+    if (r.s === 'lessons') return head + `<div class="pad"><p class="mute">Không khóa bài nào, nhưng nên đi theo thứ tự. Sau mỗi bài có trạm luyện Tsumego.</p>${pathNodes()}</div>`;
+    if (r.s === 'tsList' || r.s === 'tsDiff' || r.s !== 'home') return VC.render();
+    const nl = nextLesson(), nt = nextTs();
+    return head + `<div class="pad C-hero">
+      <div class="col"><h1>Chào bạn 👋</h1>
+        <div class="card col"><b>Học tiếp</b><div>${nl.t}</div><div class="mute">Bước ${nl.step ?? 1}/${nl.steps}</div>
+          <div class="bar"><i style="width:${nl.st === 'run' ? (nl.step / nl.steps) * 100 : 0}%"></i></div>
+          <button class="pri" data-go="lesson:${nl.id}">Học tiếp ▸</button></div>
+        <div class="card col"><b>Đang dở</b>
+          ${SAVED.ai ? `<div class="list-item" data-go="game:ai" style="border:0;padding:8px 0"><span class="num">🤖</span><div class="grow">Ván dở với AI<div class="mute">${SAVED.ai.moves} nước · ${SAVED.ai.level}</div></div>›</div>` : ''}
+          <div class="list-item" data-go="ts:${nt.id}" style="border:0;padding:8px 0"><span class="num">🧩</span><div class="grow">Tsumego mức ${nt.d}, bài ${nt.n}<div class="mute">Bài chưa giải tiếp theo</div></div>›</div></div></div>
+      <div class="C-big">
+        <div class="card" data-go="lessons"><b>🗺️</b><div><h3>Lộ trình học</h3><span class="mute">2/8 bài xong</span></div></div>
+        <div class="card" data-go="tsList"><b>🧩</b><div><h3>Tsumego</h3><span class="mute">${TSUMEGO.filter(t => t.r >= 3).length}/120 giải được</span></div></div>
+        <div class="card" data-go="setup:ai"><b>🤖</b><div><h3>Chơi với AI</h3><span class="mute">${SAVED.ai ? 'Có ván dở' : 'Ván mới'}</span></div></div>
+        <div class="card" data-go="setup:local"><b>👥</b><div><h3>Hai người</h3><span class="mute">Cùng một máy</span></div></div>
+      </div></div>`;
+  },
+};
+
+const ALL = { A:VA, B:VB, C:VC, D:VD };
+const V = () => ALL[variant];
+
+// ---------- render + sự kiện ----------
+const app = document.getElementById('app');
+function render() {
+  app.innerHTML = V().render() + (modal ? `<div class="modal-bg" data-close><div class="sheet" onclick="event.stopPropagation()">${MODALS[modal]}</div></div>` : '');
+  document.getElementById('pt-lbl').textContent = `${variant}: ${V().name}`;
+  document.getElementById('pt-state').textContent = JSON.stringify({ variant, stack, modal, width: app.clientWidth }, null, 1);
+  app.scrollTop = 0; if (!document.body.classList.contains('phone')) window.scrollTo(0, 0);
+}
+app.addEventListener('click', e => {
+  const el = e.target.closest('[data-go],[data-back],[data-root],[data-home],[data-replace],[data-modal],[data-close],[data-diff]');
+  if (!el) return; const d = el.dataset;
+  if (d.go) go(parse(d.go));
+  else if ('back' in d) back();
+  else if (d.root) root({ s: d.root });
+  else if ('home' in d) root({ s: V().root });
+  else if (d.replace) { stack[stack.length - 1] = parse(d.replace); render(); }
+  else if (d.modal) { modal = d.modal; render(); }
+  else if ('close' in d) { modal = null; render(); }
+  else if (d.diff) { diffSel = +d.diff; render(); }
+});
+function setVariant(v) {
+  variant = v; params.set('variant', v); history.replaceState(null, '', '?' + params); resetStack(); render();
+}
+const step = k => setVariant(VARIANTS[(VARIANTS.indexOf(variant) + k + VARIANTS.length) % VARIANTS.length]);
+document.getElementById('pt-prev').onclick = () => step(-1);
+document.getElementById('pt-next').onclick = () => step(1);
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,[contenteditable]')) return;
+  if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1);
+});
+const setFrame = on => { document.body.classList.toggle('phone', on); params.set('frame', on ? 'phone' : 'full'); history.replaceState(null, '', '?' + params); render(); };
+document.getElementById('pt-frame').onclick = () => setFrame(!document.body.classList.contains('phone'));
+document.getElementById('pt-st').onclick = () => { const p = document.getElementById('pt-state'); p.hidden = !p.hidden; };
+addEventListener('resize', render);
+document.body.classList.toggle('phone', params.get('frame') === 'phone');
+resetStack(); render();
+</script>
+</body>
+</html>
