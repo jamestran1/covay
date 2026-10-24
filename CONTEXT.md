@@ -27,7 +27,7 @@ A Play rejected by the rules because its Point is occupied, it would be suicide,
 _Avoid_: Invalid move, error
 
 **Game**:
-One match between Black and White, from the first Move to its Result, passing through the phases Playing, Scoring and Finished.
+One match between Black and White, from the first Move to its Game result, passing through the phases Playing, Scoring and Finished.
 _Avoid_: Match, round
 
 **Scoring**:
@@ -66,9 +66,9 @@ _Avoid_: Prisoners, prisoner count
 Taking back the most recent Move (or the last pair when playing the AI) during Playing.
 _Avoid_: Takeback, rewind
 
-**Result**:
+**Game result**:
 How a Finished Game ended: a win by Resignation, a win by a score margin, or Jigo.
-_Avoid_: Outcome, winner
+_Avoid_: Result (on its own), outcome, winner
 
 **Jigo**:
 A drawn Game, possible only when Komi is a whole number.
@@ -83,3 +83,19 @@ _Avoid_: Tutorial, course
 **Tsumego**:
 A life-and-death problem: a fixed position where the learner must find the correct sequence of moves.
 _Avoid_: Puzzle, problem, exercise
+
+**Goal**:
+What the learner must achieve in a Tsumego: Live, Kill or Capture.
+_Avoid_: Objective, task
+
+**Solution tree**:
+The authored tree of a Tsumego's Moves, alternating learner and opponent, whose leaves are marked Correct or Wrong. Any Move outside the tree is wrong.
+_Avoid_: Answer, solution, variations
+
+**Refutation**:
+The opponent's reply sequence on a Wrong branch of a Solution tree, played to show the learner why their Move fails.
+_Avoid_: Punishment, counter
+
+**Attempt**:
+One try at a Tsumego, from its starting Position until it is Solved or Failed. Illegal moves do not end an Attempt.
+_Avoid_: Try, session, run
