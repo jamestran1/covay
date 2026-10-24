@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE: Định dạng Lesson</title>
+<style>
+  :root { --bg:#fafaf7; --fg:#1d1d1b; --muted:#6b6b66; --line:#deddd6; --accent:#2f6fb3; --ok:#2e7d32; --bad:#b3261e; --wood:#e3c27d; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  main { max-width:1280px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 8px; }
+  .intro { color:var(--muted); max-width:900px; margin:0 0 20px; }
+  .badge { display:inline-block; background:#fff3cd; color:#7a5b00; border:1px solid #e6d28a; padding:1px 8px; border-radius:10px; font-size:12px; margin-left:8px; vertical-align:middle; }
+  .grid { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:20px; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px; }
+  textarea { width:100%; height:520px; font:13px/1.45 ui-monospace, Consolas, monospace; border:1px solid var(--line); border-radius:6px; padding:10px; resize:vertical; }
+  button { font:inherit; padding:6px 12px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:default; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  .errors { color:var(--bad); font-size:13px; margin:8px 0 0; padding-left:18px; }
+  .okmsg { color:var(--ok); font-size:13px; margin-top:8px; }
+  .stephead { color:var(--muted); font-size:13px; }
+  .steptitle { font-size:18px; font-weight:600; margin:2px 0 10px; }
+  .boardwrap { display:flex; justify-content:center; }
+  svg.board { width:100%; max-width:420px; height:auto; }
+  .text p { margin:8px 0; }
+  .message { margin-top:10px; padding:8px 12px; border-radius:6px; background:#eef3fa; border-left:3px solid var(--accent); }
+  .message.ok { background:#edf7ee; border-color:var(--ok); }
+  .message.bad { background:#fbeceb; border-color:var(--bad); }
+  dl.state { display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; margin:0; font-size:14px; }
+  dl.state dt { color:var(--muted); }
+  dl.state dd { margin:0; }
+  .changed { background:#fff3cd; border-radius:3px; padding:0 3px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .tabs button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .scenario-desc { color:var(--muted); margin:0 0 10px; }
+  ol.steps { padding-left:20px; margin:0; }
+  ol.steps li { margin:4px 0; }
+  ol.steps li.done button { text-decoration:line-through; }
+  .section { margin-top:20px; }
+  code { background:#f1f0ea; padding:0 4px; border-radius:3px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Định dạng Lesson tương tác <span class="badge">PROTOTYPE, bỏ đi sau khi chốt</span></h1>
+  <p class="intro">
+    Câu hỏi: một Lesson viết bằng Markdown (thế cờ vẽ bằng ASCII, Solution tree viết bằng danh sách lồng nhau) có
+    <b>dễ soạn</b> không, và có <b>diễn đạt đủ</b> bài "Bắt quân" không? Bên trái là file bài học, sửa trực tiếp rồi bấm
+    "Nạp bài". Bên phải là bài học chạy thật. Giao diện bàn cờ cố ý sơ sài, đó là việc của ticket "Giao diện bàn cờ SVG".
+    Trong phần "Kịch bản" có sẵn các tình huống khó để thử.
+  </p>
+
+  <div class="grid">
+    <section class="card">
+      <h2>File bài học (<code>content/lessons/vi/bat-quan.md</code>)</h2>
+      <textarea id="source" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="primary" id="load">Nạp bài</button>
+        <button id="loadSample">Khôi phục bài mẫu</button>
+        <button id="loadBroken">Nạp bài soạn lỗi</button>
+      </div>
+      <div id="validation"></div>
+    </section>
+
+    <section class="card">
+      <div id="player"></div>
+    </section>
+  </div>
+
+  <div class="grid section">
+    <section class="card">
+      <h2>Trạng thái Lesson run</h2>
+      <dl class="state" id="state"></dl>
+      <h2 style="margin-top:16px">Chơi tự do</h2>
+      <div class="row" id="freeplay"></div>
+      <p class="stephead" style="margin-top:8px">Ở bước Thực hành, bấm lên bàn cờ để đặt quân.</p>
+    </section>
+
+    <section class="card">
+      <h2>Kịch bản</h2>
+      <div class="tabs" id="tabs"></div>
+      <div id="scenario"></div>
+    </section>
+  </div>
+</main>
+
+<script type="text/plain" id="sample">---
+id: bat-quan
+title: Bắt quân
+---
+
+## Explanation: Khí của một quân
+
+```board
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . X . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+```
+
+@circle D5 C4 E4 D3
+
+Các giao điểm trống nằm sát quân cờ theo đường kẻ gọi là **khí**.
+Quân đen ở D4 có 4 khí, đánh dấu bằng vòng tròn.
+
+## Explanation: Ở cạnh và ở góc, quân có ít khí hơn
+
+```board
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+X . . X . . .
+```
+
+@circle A2 B1
+@triangle C1 E1 D2
+
+Quân ở góc A1 chỉ có 2 khí (vòng tròn).
+Quân ở cạnh D1 có 3 khí (tam giác).
+
+## Demonstration: Bắt một quân
+
+```board
+. . . . . . .
+. . . . . . .
+. . . X . . .
+. . X O X . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+```
+
+@label A=D3
+
+Quân trắng chỉ còn một khí ở A.
+Khi Đen đặt quân vào khí cuối cùng, quân trắng bị bắt và nhấc khỏi bàn.
+
+1. B D3 Đen lấp khí cuối cùng. Quân trắng bị bắt.
+
+## Practice: Bắt quân trắng
+
+```board
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. X . . . . .
+X O X . . . .
+. . . . . . .
+```
+
+Đen đi. Hãy bắt quân trắng.
+
+- B B1 ✓ Chính xác! Quân trắng hết khí và bị bắt.
+
+## Practice: Để trắng chỉ còn một khí
+
+```board
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . X O X . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+```
+
+Đen đi. Hãy đặt quân để quân trắng chỉ còn đúng một khí.
+
+- B D5 ✓ Đúng! Trắng chỉ còn một khí.
+- B D3 ✓ Đúng! Trắng chỉ còn một khí.
+
+## Practice: Đuổi quân trắng dọc cạnh
+
+```board
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . X O . . .
+```
+
+Đen đi. Hãy bắt quân trắng. Trắng sẽ cố chạy.
+
+- B D2
+  - W E1 Trắng chạy sang phải.
+    - B E2
+      - W F1 Trắng vẫn chạy.
+        - B F2
+          - W G1 Trắng đã tới góc.
+            - B G2 ✓ Bắt được cả 4 quân!
+- B E1
+  - W D2 ✗ Trắng chạy lên giữa bàn, có thêm nhiều khí.
+</script>
+
+<script type="text/plain" id="broken">---
+id: bai-loi
+---
+
+## Explanation: Bàn cờ không vuông
+
+```board
+. . . . .
+. . . . .
+. . . . .
+```
+
+## Practice: Lỗi trong Solution tree
+
+```board
+. . . . .
+. . . . .
+. . X . .
+. . . . .
+. . . . .
+```
+
+Đen đi.
+
+- B C3 ✓ Đặt lên quân đã có.
+- B D4
+  - B D5 ✓ Hai nước đen liền nhau.
+- B Z9 ✓ Tọa độ ngoài bàn.
+- B B2
+  - W B3
+
+## Demonstration: Thiếu nước đi
+
+```board
+. . . . .
+. . . . .
+. . . . .
+. . . . .
+. . . . .
+```
+
+@circle K10
+
+## Quiz: Loại bước không tồn tại
+</script>
+
+<script>
+/* ===== Portable logic module: Go rules (minimal), Lesson parser, createLesson, Lesson run. No DOM. ===== */
+const Lesson = (() => {
+  const COLS = 'ABCDEFGHJKLMNOPQRST';
+  const other = c => (c === 'B' ? 'W' : 'B');
+
+  // ---- Coordinates: Go notation (C3) <-> Point {x, y} zero-based from top-left
+  function toPoint(s, size) {
+    const m = /^([A-HJ-T])(\d{1,2})$/i.exec(s || '');
+    if (!m) return null;
+    const x = COLS.indexOf(m[1].toUpperCase()), n = +m[2];
+    if (x < 0 || x >= size || n < 1 || n > size) return null;
+    return { x, y: size - n };
+  }
+  const pointName = (p, size) => COLS[p.x] + (size - p.y);
+
+  // ---- Minimal rules: occupied, capture, suicide, positional superko
+  function neighbors(i, size) {
+    const x = i % size, y = (i - x) / size, out = [];
+    if (x > 0) out.push(i - 1); if (x < size - 1) out.push(i + 1);
+    if (y > 0) out.push(i - size); if (y < size - 1) out.push(i + size);
+    return out;
+  }
+  function chainAt(cells, size, i) {
+    const c = cells[i], seen = new Set([i]), stack = [i], libs = new Set();
+    while (stack.length) {
+      const j = stack.pop();
+      for (const n of neighbors(j, size)) {
+        if (cells[n] === '.') libs.add(n);
+        else if (cells[n] === c && !seen.has(n)) { seen.add(n); stack.push(n); }
+      }
+    }
+    return { stones: [...seen], libs };
+  }
+  function play(pos, color, p) {
+    const size = pos.size, i = p.y * size + p.x;
+    if (pos.cells[i] !== '.') return { ok: false, error: 'Occupied' };
+    const arr = pos.cells.split('');
+    arr[i] = color;
+    const captured = [];
+    for (const n of neighbors(i, size)) {
+      if (arr[n] === other(color)) {
+        const ch = chainAt(arr, size, n);
+        if (ch.libs.size === 0) ch.stones.forEach(s => { if (arr[s] !== '.') { arr[s] = '.'; captured.push(s); } });
+      }
+    }
+    if (chainAt(arr, size, i).libs.size === 0) return { ok: false, error: 'Suicide' };
+    const cells = arr.join('');
+    if (pos.history.includes(cells)) return { ok: false, error: 'PositionalSuperko' };
+    return { ok: true, pos: { size, cells, toMove: other(color), history: [...pos.history, cells] }, captured: captured.length };
+  }
+
+  // ---- Parser: Markdown -> raw lesson data (no rule checks here)
+  function parse(md) {
+    const lines = md.replace(/\r/g, '').split('\n');
+    const meta = {}, steps = [], errors = [];
+    let i = 0;
+    if ((lines[0] || '').trim() === '---') {
+      i = 1;
+      while (i < lines.length && lines[i].trim() !== '---') {
+        const m = /^(\w+):\s*(.*)$/.exec(lines[i]);
+        if (m) meta[m[1]] = m[2].trim();
+        i++;
+      }
+      i++;
+    }
+    let cur = null, inBoard = false, stack = [];
+    for (; i < lines.length; i++) {
+      const line = lines[i], lineNo = i + 1, t = line.trim();
+      let m;
+      if (inBoard) {
+        if (t.startsWith('```')) inBoard = false;
+        else if (t) cur.rows.push(t.split(/\s+/));
+        continue;
+      }
+      if ((m = /^##\s+(\w+)\s*:\s*(.*)$/.exec(line))) {
+        cur = { kind: m[1], title: m[2].trim(), line: lineNo, rows: [], marks: [], text: [], moves: [], tree: [] };
+        steps.push(cur); stack = []; continue;
+      }
+      if (!cur) { if (t) errors.push({ kind: 'TextOutsideStep', line: lineNo }); continue; }
+      if (t === '```board') { inBoard = true; continue; }
+      if ((m = /^@(\w+)\s+(.*)$/.exec(t))) { cur.marks.push({ type: m[1], args: m[2].split(/\s+/), line: lineNo }); continue; }
+      if ((m = /^(\s*)-\s+(\S+)\s+(\S+)\s*(.*)$/.exec(line))) {
+        const depth = Math.floor(m[1].length / 2);
+        const rest = /^(✓|✗)\s*(.*)$/.exec(m[4]);
+        const node = { color: m[2], coord: m[3], mark: rest ? (rest[1] === '✓' ? 'Correct' : 'Wrong') : null,
+                       comment: (rest ? rest[2] : m[4]).trim(), line: lineNo, children: [] };
+        if (depth === 0) cur.tree.push(node);
+        else if (stack[depth - 1]) stack[depth - 1].children.push(node);
+        else { errors.push({ kind: 'BadIndent', line: lineNo }); continue; }
+        stack[depth] = node; stack.length = depth + 1;
+        continue;
+      }
+      if ((m = /^\d+\.\s+(\S+)\s+(\S+)\s*(.*)$/.exec(t))) { cur.moves.push({ color: m[1], coord: m[2], comment: m[3].trim(), line: lineNo }); continue; }
+      cur.text.push(line);
+    }
+    return { meta, steps, errors };
+  }
+
+  // ---- createLesson: validate raw data against the rules, build the Lesson value
+  const KINDS = ['Explanation', 'Demonstration', 'Practice'];
+  const MARKS = ['circle', 'triangle', 'square', 'cross', 'label'];
+  function create(raw) {
+    const errors = [...raw.errors];
+    const err = (kind, line, detail) => errors.push({ kind, line, detail });
+    if (!raw.meta.id) err('MissingId', 1);
+    if (!raw.meta.title) err('MissingTitle', 1);
+    if (!raw.steps.length) err('NoSteps', 1);
+    const steps = [];
+    for (const s of raw.steps) {
+      if (!KINDS.includes(s.kind)) { err('UnknownStepKind', s.line, s.kind); continue; }
+      const size = s.rows.length;
+      if (size < 5 || size > 19 || s.rows.some(r => r.length !== size)) { err('BoardNotSquare5to19', s.line, `${size} hàng`); continue; }
+      let cells = '';
+      for (const r of s.rows) for (const c of r) cells += c === 'X' ? 'B' : c === 'O' ? 'W' : c === '.' ? '.' : '?';
+      if (cells.includes('?')) { err('BadBoardChar', s.line); continue; }
+      for (let i = 0; i < cells.length; i++) if (cells[i] !== '.' && chainAt(cells, size, i).libs.size === 0) { err('ChainWithoutLiberty', s.line); break; }
+      const base = { size, cells, toMove: 'B', history: [cells] };
+      const marks = [];
+      for (const mk of s.marks) {
+        if (!MARKS.includes(mk.type)) { err('UnknownMark', mk.line, mk.type); continue; }
+        for (const a of mk.args) {
+          const [label, coord] = mk.type === 'label' ? a.split('=') : [null, a];
+          const p = toPoint(coord, size);
+          if (!p || (mk.type === 'label' && !label)) err('BadMark', mk.line, a); else marks.push({ type: mk.type, point: p, label });
+        }
+      }
+      const text = s.text.join('\n').trim().split(/\n\s*\n/).filter(Boolean).map(p => p.replace(/\n/g, ' '));
+      const step = { kind: s.kind, title: s.title, line: s.line, size, marks, text, position: base };
+      if (s.kind === 'Demonstration') {
+        if (!s.moves.length) err('DemonstrationWithoutMoves', s.line);
+        let pos = base, prev = null;
+        step.moves = [];
+        for (const mv of s.moves) {
+          const p = toPoint(mv.coord, size);
+          if (!/^[BW]$/.test(mv.color) || !p) { err('BadMove', mv.line, `${mv.color} ${mv.coord}`); break; }
+          if (prev && prev === mv.color) err('ColoursNotAlternating', mv.line);
+          const r = play(pos, mv.color, p);
+          if (!r.ok) { err('IllegalMove:' + r.error, mv.line, mv.coord); break; }
+          pos = r.pos; prev = mv.color;
+          step.moves.push({ color: mv.color, point: p, comment: mv.comment });
+        }
+        if (step.moves.length) step.position = { ...base, toMove: step.moves[0].color };
+      }
+      if (s.kind === 'Practice') {
+        if (!s.tree.length) err('PracticeWithoutSolutionTree', s.line);
+        const learner = s.tree[0] && s.tree[0].color;
+        let correct = 0;
+        const walk = (nodes, pos, expected) => nodes.map(n => {
+          const p = toPoint(n.coord, size);
+          if (!/^[BW]$/.test(n.color) || !p) { err('BadMove', n.line, `${n.color} ${n.coord}`); return null; }
+          if (n.color !== expected) err('ColoursNotAlternating', n.line, `cần ${expected}`);
+          const r = play(pos, n.color, p);
+          if (!r.ok) { err('IllegalMove:' + r.error, n.line, n.coord); return null; }
+          if (!n.children.length && !n.mark) err('LeafWithoutMark', n.line, n.coord);
+          if (n.children.length && n.mark) err('MarkOnInnerNode', n.line, n.coord);
+          if (n.mark === 'Correct') correct++;
+          return { color: n.color, point: p, mark: n.mark, comment: n.comment, children: walk(n.children, r.pos, other(n.color)).filter(Boolean) };
+        });
+        step.learner = learner;
+        step.position = { ...base, toMove: learner || 'B' };
+        step.tree = walk(s.tree, step.position, learner).filter(Boolean);
+        if (s.tree.length && !correct) err('NoCorrectLeaf', s.line);
+      }
+      steps.push(step);
+    }
+    if (errors.length) return { ok: false, errors };
+    return { ok: true, value: { id: raw.meta.id, title: raw.meta.title, steps } };
+  }
+
+  // ---- Lesson run: immutable progress through one Lesson
+  const ILLEGAL = { Occupied: 'Giao điểm này đã có quân. Hãy đi lại.', Suicide: 'Nước này là tự sát, không được phép. Hãy đi lại.', PositionalSuperko: 'Nước này lặp lại thế cờ cũ, không được phép. Hãy đi lại.' };
+
+  function enterStep(lesson, i, results = {}) {
+    const step = lesson.steps[i];
+    return { status: 'InStep', stepIndex: i, position: step.position, lastMove: null, captures: { B: 0, W: 0 },
+             demoIndex: 0, attempt: step.kind === 'Practice' ? { number: 1, status: 'InProgress', node: null, path: [] } : null,
+             revealed: false, message: null, results };
+  }
+  const start = lesson => enterStep(lesson, 0);
+
+  function canAdvance(lesson, s) {
+    if (s.status === 'Completed') return false;
+    const step = lesson.steps[s.stepIndex];
+    if (step.kind === 'Demonstration') return s.demoIndex === step.moves.length;
+    if (step.kind === 'Practice') return s.attempt.status === 'Solved' || s.revealed;
+    return true;
+  }
+
+  function applyMove(s, color, point, comment) {
+    const r = play(s.position, color, point);
+    if (!r.ok) return null;
+    return { ...s, position: r.pos, lastMove: point, captures: { ...s.captures, [color]: s.captures[color] + r.captured } };
+  }
+
+  function firstCorrectPath(nodes) {
+    for (const n of nodes) {
+      if (n.mark === 'Correct') return [n];
+      const rest = firstCorrectPath(n.children);
+      if (rest) return [n, ...rest];
+    }
+    return null;
+  }
+
+  function reduce(lesson, s, a) {
+    const step = lesson.steps[s.stepIndex];
+    const refuse = message => ({ ...s, message: { tone: 'info', text: message } });
+    switch (a.type) {
+      case 'restart': return start(lesson);
+      case 'next': {
+        if (!canAdvance(lesson, s)) return refuse(step.kind === 'Practice' ? 'Cần giải xong bài thực hành (hoặc xem đáp án) mới sang bước tiếp.' : 'Hãy xem hết các nước minh họa trước.');
+        if (s.stepIndex === lesson.steps.length - 1) return { ...s, status: 'Completed', message: { tone: 'ok', text: 'Hoàn thành bài học!' } };
+        return enterStep(lesson, s.stepIndex + 1, s.results);
+      }
+      case 'demoForward': {
+        if (step.kind !== 'Demonstration' || s.demoIndex >= step.moves.length) return refuse('Không còn nước minh họa nào.');
+        const mv = step.moves[s.demoIndex];
+        const n = applyMove(s, mv.color, mv.point);
+        return { ...n, demoIndex: s.demoIndex + 1, message: mv.comment ? { tone: 'info', text: mv.comment } : null };
+      }
+      case 'play': {
+        if (step.kind !== 'Practice') return refuse('Bước này không cần đặt quân.');
+        const att = s.attempt;
+        if (att.status !== 'InProgress') return refuse(att.status === 'Solved' ? 'Bài đã giải xong.' : 'Lần thử này đã sai. Bấm "Thử lại".');
+        const r = play(s.position, step.learner, a.point);
+        if (!r.ok) return refuse(ILLEGAL[r.error]);
+        const name = pointName(a.point, step.size);
+        const children = att.node ? att.node.children : step.tree;
+        const child = children.find(c => c.point.x === a.point.x && c.point.y === a.point.y);
+        let n = applyMove(s, step.learner, a.point);
+        if (!child) return { ...n, attempt: { ...att, status: 'Failed', path: [...att.path, name] }, message: { tone: 'bad', text: 'Nước này không có trong đáp án.' } };
+        let node = child, path = [...att.path, name], comment = child.comment;
+        if (!node.mark) {
+          const reply = node.children[0];
+          n = applyMove(n, reply.color, reply.point);
+          path.push(pointName(reply.point, step.size));
+          node = reply; comment = reply.comment || comment;
+        }
+        if (node.mark === 'Correct') {
+          const results = s.results[s.stepIndex] ? s.results : { ...s.results, [s.stepIndex]: att.number === 1 ? 'Giải đúng ngay lần đầu' : `Giải đúng ở lần thử ${att.number}` };
+          // Other first moves that also lead to a Correct leaf, offered as "Thử cách khác"
+          const first = att.path.length ? att.firstMove : a.point;
+          const alternatives = step.tree.filter(r => !(r.point.x === first.x && r.point.y === first.y) && firstCorrectPath([r])).map(r => r.point);
+          const altText = alternatives.length ? ` Còn ${alternatives.length === 1 ? 'một' : alternatives.length} đáp án khác: ${alternatives.map(p => pointName(p, step.size)).join(', ')}.` : '';
+          return { ...n, results, attempt: { ...att, status: 'Solved', node, path, alternatives }, message: { tone: 'ok', text: (comment || 'Đúng rồi!') + altText } };
+        }
+        if (node.mark === 'Wrong') return { ...n, attempt: { ...att, status: 'Failed', node, path }, message: { tone: 'bad', text: comment || 'Chưa đúng.' } };
+        return { ...n, attempt: { ...att, node, path, firstMove: att.firstMove || a.point }, message: comment ? { tone: 'info', text: comment } : null };
+      }
+      case 'tryAnother': {
+        if (step.kind !== 'Practice' || s.attempt.status !== 'Solved' || !s.attempt.alternatives.length) return refuse('Không có đáp án khác để thử.');
+        const fresh = enterStep(lesson, s.stepIndex, s.results);
+        return { ...fresh, attempt: { ...fresh.attempt, number: s.attempt.number + 1 }, message: { tone: 'info', text: 'Hãy thử một đáp án khác.' } };
+      }
+      case 'retry': {
+        if (step.kind !== 'Practice' || s.attempt.status !== 'Failed') return refuse('Chỉ thử lại được sau khi đi sai.');
+        const fresh = enterStep(lesson, s.stepIndex, s.results);
+        return { ...fresh, attempt: { ...fresh.attempt, number: s.attempt.number + 1 } };
+      }
+      case 'showAnswer': {
+        if (step.kind !== 'Practice' || s.attempt.status !== 'Failed') return refuse('Chỉ xem được đáp án sau khi đi sai.');
+        let n = { ...enterStep(lesson, s.stepIndex, s.results), attempt: s.attempt };
+        const path = firstCorrectPath(step.tree);
+        for (const node of path) n = applyMove(n, node.color, node.point);
+        const last = path[path.length - 1];
+        return { ...n, revealed: true, results: { ...s.results, [s.stepIndex]: 'Đã xem đáp án' },
+                 message: { tone: 'info', text: 'Đáp án: ' + path.map(p => pointName(p.point, step.size)).join(', ') + '. ' + (last.comment || '') } };
+      }
+    }
+    return s;
+  }
+
+  // startAt: only for the demo page's walkthroughs (jump straight to a step)
+  return { parse, create, start, startAt: enterStep, reduce, canAdvance, pointName, toPoint };
+})();
+
+/* ===== Page shell (throwaway) ===== */
+const $ = id => document.getElementById(id);
+const KIND_VI = { Explanation: 'Giải thích', Demonstration: 'Minh họa', Practice: 'Thực hành' };
+const ATTEMPT_VI = { InProgress: 'Đang làm', Solved: 'Đã giải', Failed: 'Sai' };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+
+let lesson = null, run = null, prevView = {};
+
+function load(md) {
+  $('source').value = md;
+  const res = Lesson.create(Lesson.parse(md));
+  if (!res.ok) {
+    lesson = null; run = null;
+    $('validation').innerHTML = `<ul class="errors">${res.errors.map(e => `<li>Dòng ${e.line ?? '?'}: <code>${esc(e.kind)}</code>${e.detail ? ' (' + esc(e.detail) + ')' : ''}</li>`).join('')}</ul>`;
+  } else {
+    lesson = res.value; run = Lesson.start(lesson);
+    $('validation').innerHTML = `<div class="okmsg">createLesson: hợp lệ, ${lesson.steps.length} bước.</div>`;
+  }
+  prevView = {};
+  render();
+}
+
+function dispatch(action) { if (!run) return; run = Lesson.reduce(lesson, run, action); render(); }
+
+function boardSvg(step, s) {
+  const size = step.size, c = 40, m = 30, w = m * 2 + c * (size - 1);
+  const xy = i => m + i * c;
+  let g = `<svg class="board" viewBox="0 0 ${w} ${w}" id="boardsvg"><rect width="${w}" height="${w}" fill="var(--wood)" rx="6"/>`;
+  for (let i = 0; i < size; i++) {
+    g += `<line x1="${xy(0)}" y1="${xy(i)}" x2="${xy(size - 1)}" y2="${xy(i)}" stroke="#5a4a2a"/><line x1="${xy(i)}" y1="${xy(0)}" x2="${xy(i)}" y2="${xy(size - 1)}" stroke="#5a4a2a"/>`;
+    g += `<text x="${xy(i)}" y="${m - 14}" font-size="12" text-anchor="middle" fill="#5a4a2a">${'ABCDEFGHJKLMNOPQRST'[i]}</text>`;
+    g += `<text x="${m - 18}" y="${xy(i) + 4}" font-size="12" text-anchor="middle" fill="#5a4a2a">${size - i}</text>`;
+  }
+  const cells = s.position.cells;
+  for (let i = 0; i < cells.length; i++) {
+    const x = xy(i % size), y = xy(Math.floor(i / size));
+    if (cells[i] !== '.') g += `<circle cx="${x}" cy="${y}" r="${c * 0.46}" fill="${cells[i] === 'B' ? '#1d1d1b' : '#fff'}" stroke="#1d1d1b"/>`;
+    g += `<rect x="${x - c / 2}" y="${y - c / 2}" width="${c}" height="${c}" fill="transparent" data-i="${i}" style="cursor:pointer"/>`;
+  }
+  if (s.lastMove) {
+    const i = s.lastMove.y * size + s.lastMove.x;
+    g += `<circle cx="${xy(s.lastMove.x)}" cy="${xy(s.lastMove.y)}" r="6" fill="${cells[i] === 'B' ? '#fff' : '#1d1d1b'}" pointer-events="none"/>`;
+  }
+  const alts = s.attempt && s.attempt.status === 'Solved' ? (s.attempt.alternatives || []).map(point => ({ type: 'circle', point })) : [];
+  for (const mk of [...(s.lastMove ? [] : step.marks), ...alts]) {
+    const x = xy(mk.point.x), y = xy(mk.point.y), stone = cells[mk.point.y * size + mk.point.x];
+    const col = stone === 'B' ? '#fff' : stone === 'W' ? '#1d1d1b' : 'var(--accent)';
+    const r = 10;
+    const st = `stroke="${col}" stroke-width="2.5" fill="none" pointer-events="none"`;
+    if (mk.type === 'circle') g += `<circle cx="${x}" cy="${y}" r="${r}" ${st}/>`;
+    if (mk.type === 'square') g += `<rect x="${x - r}" y="${y - r}" width="${r * 2}" height="${r * 2}" ${st}/>`;
+    if (mk.type === 'triangle') g += `<polygon points="${x},${y - r - 2} ${x - r},${y + r - 2} ${x + r},${y + r - 2}" ${st}/>`;
+    if (mk.type === 'cross') g += `<path d="M${x - r} ${y - r}L${x + r} ${y + r}M${x + r} ${y - r}L${x - r} ${y + r}" ${st}/>`;
+    if (mk.type === 'label') g += `<rect x="${x - 11}" y="${y - 11}" width="22" height="22" fill="var(--wood)" pointer-events="none"/><text x="${x}" y="${y + 6}" font-size="17" font-weight="700" text-anchor="middle" fill="${col}" pointer-events="none">${esc(mk.label)}</text>`;
+  }
+  return g + '</svg>';
+}
+
+function render() {
+  const player = $('player');
+  if (!lesson) {
+    player.innerHTML = '<p class="stephead">Bài học không hợp lệ, xem lỗi bên trái.</p>';
+    $('state').innerHTML = ''; renderFreeplay(); renderScenario(); return;
+  }
+  const s = run, step = lesson.steps[s.stepIndex];
+  const att = s.attempt;
+  player.innerHTML = `
+    <div class="stephead">${esc(lesson.title)} · Bước ${s.stepIndex + 1}/${lesson.steps.length} · ${KIND_VI[step.kind]}</div>
+    <div class="steptitle">${esc(step.title)}</div>
+    <div class="boardwrap">${boardSvg(step, s)}</div>
+    <div class="text">${step.text.map(p => `<p>${inline(p)}</p>`).join('')}</div>
+    ${s.message ? `<div class="message ${s.message.tone}">${esc(s.message.text)}</div>` : ''}
+    <div class="row">
+      ${step.kind === 'Demonstration' ? `<button id="p-demo" ${s.demoIndex >= step.moves.length ? 'disabled' : ''}>Nước tiếp theo (${s.demoIndex}/${step.moves.length})</button>` : ''}
+      ${step.kind === 'Practice' && att.status === 'Solved' && att.alternatives.length ? '<button id="p-another">Thử cách khác</button>' : ''}
+      ${step.kind === 'Practice' && att.status === 'Failed' ? `<button id="p-retry">Thử lại</button>${s.revealed ? '' : '<button id="p-answer">Xem đáp án</button>'}` : ''}
+      <button class="primary" id="p-next" ${Lesson.canAdvance(lesson, s) ? '' : 'disabled'}>${s.stepIndex === lesson.steps.length - 1 ? 'Hoàn thành' : 'Tiếp'}</button>
+    </div>`;
+  $('boardsvg').addEventListener('click', e => {
+    const i = e.target.dataset.i; if (i == null) return;
+    dispatch({ type: 'play', point: { x: i % step.size, y: Math.floor(i / step.size) } });
+  });
+  const on = (id, a) => { const b = $(id); if (b) b.onclick = () => dispatch(a); };
+  on('p-demo', { type: 'demoForward' }); on('p-retry', { type: 'retry' }); on('p-answer', { type: 'showAnswer' }); on('p-another', { type: 'tryAnother' }); on('p-next', { type: 'next' });
+
+  const view = {
+    'Trạng thái': s.status === 'Completed' ? 'Hoàn thành bài học' : 'Đang học',
+    'Bước hiện tại': `${s.stepIndex + 1}/${lesson.steps.length}: ${KIND_VI[step.kind]}, "${step.title}"`,
+    'Được sang bước tiếp?': Lesson.canAdvance(lesson, s) ? 'Có' : 'Chưa',
+    ...(step.kind === 'Demonstration' ? { 'Nước minh họa': `${s.demoIndex}/${step.moves.length}` } : {}),
+    ...(step.kind === 'Practice' ? {
+      'Người học cầm': step.learner === 'B' ? 'Đen' : 'Trắng',
+      'Attempt': `lần thử ${att.number}, ${ATTEMPT_VI[att.status]}`,
+      'Các nước đã đi': att.path.join(', ') || '(chưa có)',
+      'Đã xem đáp án': s.revealed ? 'Có' : 'Không',
+    } : {}),
+    'Quân bị bắt (Đen bắt / Trắng bắt)': `${s.captures.B} / ${s.captures.W}`,
+    'Kết quả các bài thực hành': Object.entries(s.results).map(([k, v]) => `Bước ${+k + 1}: ${v}`).join('; ') || '(chưa có)',
+  };
+  $('state').innerHTML = Object.entries(view).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${prevView[k] !== undefined && prevView[k] !== v ? `<span class="changed">${esc(v)}</span>` : esc(v)}</dd>`).join('');
+  prevView = view;
+  renderFreeplay(); renderScenario();
+}
+
+function renderFreeplay() {
+  const acts = [['Tiếp', { type: 'next' }], ['Nước minh họa tiếp theo', { type: 'demoForward' }], ['Thử lại', { type: 'retry' }], ['Xem đáp án', { type: 'showAnswer' }], ['Thử cách khác', { type: 'tryAnother' }], ['Học lại từ đầu', { type: 'restart' }]];
+  const box = $('freeplay'); box.innerHTML = '';
+  for (const [label, a] of acts) { const b = document.createElement('button'); b.textContent = label; b.disabled = !lesson; b.onclick = () => dispatch(a); box.appendChild(b); }
+}
+
+/* ---- Guided walkthroughs ---- */
+const P = name => ({ type: 'play', point: Lesson.toPoint(name, 7), label: `Đặt quân ${name}` });
+const SCENARIOS = [
+  { name: 'Học trọn bài', desc: 'Đi hết 6 bước, làm đúng mọi bài thực hành. Để ý bài cuối: Solution tree lồng 7 tầng chỉ để diễn đạt một chuỗi đuổi dọc cạnh. Soạn như vậy có quá nặng không?', at: 0,
+    steps: [{ type: 'next', label: 'Tiếp' }, { type: 'next', label: 'Tiếp' }, { type: 'demoForward', label: 'Nước minh họa tiếp theo' }, { type: 'next', label: 'Tiếp' },
+            P('B1'), { type: 'next', label: 'Tiếp' }, P('D3'), { type: 'next', label: 'Tiếp' }, P('D2'), P('E2'), P('F2'), P('G2'), { type: 'next', label: 'Hoàn thành' }] },
+  { name: 'Sai, xem Refutation', desc: 'Ở bài đuổi quân, Đen đi E1. Trắng tự đáp D2 (Refutation) rồi báo sai. Sau đó xem đáp án và đi tiếp. Kết quả ghi "Đã xem đáp án".', at: 5,
+    steps: [P('E1'), { type: 'showAnswer', label: 'Xem đáp án' }, { type: 'next', label: 'Hoàn thành' }] },
+  { name: 'Nước ngoài cây', desc: 'Đen đi D2, Trắng chạy E1. Đen đi F1 (cũng dọa bắt, nhưng không có trong cây) nên sai ngay. Thử lại và giải đúng: kết quả ghi "lần thử 2". Câu hỏi: tác giả có phải liệt kê mọi nước "gần đúng" không?', at: 5,
+    steps: [P('D2'), P('F1'), { type: 'retry', label: 'Thử lại' }, P('D2'), P('E2'), P('F2'), P('G2')] },
+  { name: 'Nhiều đáp án đúng', desc: 'Bài có hai đáp án. Đi D5 là giải xong, app báo còn D3 và khoanh nó trên bàn. "Thử cách khác" tạo Attempt mới, không tính là sai, kết quả vẫn giữ "Giải đúng ngay lần đầu".', at: 4,
+    steps: [P('D5'), { type: 'tryAnother', label: 'Thử cách khác' }, P('D3'), { type: 'next', label: 'Tiếp' }] },
+  { name: 'Nước không hợp lệ', desc: 'Đặt lên giao điểm đã có quân: báo lỗi nhưng Attempt vẫn "Đang làm", không tính là sai.', at: 3,
+    steps: [P('A2'), P('B1')] },
+  { name: 'Chặn sang bước', desc: 'Ở bước thực hành, bấm "Tiếp" khi chưa giải: bị chặn. Có nên cho bỏ qua không?', at: 3,
+    steps: [{ type: 'next', label: 'Tiếp (bị chặn)' }, P('B1'), { type: 'next', label: 'Tiếp' }] },
+  { name: 'Lỗi khi soạn bài', desc: 'Nạp một file soạn sai: bàn không vuông, đặt lên quân có sẵn, hai nước cùng màu liền nhau, tọa độ ngoài bàn, lá thiếu ✓/✗, bước Minh họa không có nước, loại bước lạ. createLesson phải liệt kê đủ, kèm số dòng.', broken: true, steps: [] },
+];
+let scIndex = 0, scDone = 0;
+
+function startScenario(i) {
+  scIndex = i; scDone = 0;
+  const sc = SCENARIOS[i];
+  load($(sc.broken ? 'broken' : 'sample').textContent.trim() + '\n');
+  if (lesson && sc.at) { run = Lesson.startAt(lesson, sc.at); prevView = {}; render(); }
+}
+
+function renderScenario() {
+  $('tabs').innerHTML = SCENARIOS.map((s, i) => `<button class="${i === scIndex ? 'active' : ''}" data-sc="${i}">${esc(s.name)}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => startScenario(+b.dataset.sc));
+  const sc = SCENARIOS[scIndex];
+  $('scenario').innerHTML = `<p class="scenario-desc">${esc(sc.desc)}</p>
+    <ol class="steps">${sc.steps.map((st, i) => `<li class="${i < scDone ? 'done' : ''}"><button data-st="${i}" ${i === scDone ? 'class="primary"' : 'disabled'}>${esc(st.label)}</button></li>`).join('')}</ol>
+    <div class="row"><button id="sc-reset">Chạy lại kịch bản từ đầu</button></div>`;
+  $('scenario').querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+    const st = sc.steps[+b.dataset.st]; scDone++;
+    dispatch({ type: st.type, point: st.point });
+  });
+  $('sc-reset').onclick = () => startScenario(scIndex);
+}
+
+$('load').onclick = () => load($('source').value);
+$('loadSample').onclick = () => load($('sample').textContent.trim() + '\n');
+$('loadBroken').onclick = () => load($('broken').textContent.trim() + '\n');
+startScenario(0);
+</script>
+</body>
+</html>
