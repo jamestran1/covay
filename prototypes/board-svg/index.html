@@ -1,0 +1,386 @@
+<!doctype html>
+<!--
+  PROTOTYPE, VỨT ĐI. Không phải code production.
+  Câu hỏi (ticket "Giao diện bàn cờ SVG", map #1): bàn cờ SVG nên trông và phản hồi thế nào
+  khi đặt quân, khi bắt quân, khi người học đánh nước ko không hợp lệ?
+  Ba biến thể khác nhau về cấu trúc, đổi bằng ?variant=A|B|C hoặc thanh nổi dưới đáy (phím ← →).
+  Rules engine ở đây là bản nháp tối thiểu (bắt quân, tự sát, Positional superko), không phải domain thật.
+-->
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype bàn cờ SVG</title>
+<style>
+  :root { --bg:#f4f1ea; --ink:#222; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); padding:16px 16px 96px; }
+  .proto-note { font-size:12px; color:#8a6d3b; margin-bottom:12px; }
+  svg { display:block; touch-action:manipulation; user-select:none; }
+
+  /* ---------- prototype switcher (không thuộc thiết kế) ---------- */
+  .switcher { position:fixed; left:50%; bottom:12px; transform:translateX(-50%); z-index:50;
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;
+    background:#111; color:#fff; padding:8px 12px; border-radius:999px; box-shadow:0 6px 24px rgba(0,0,0,.35);
+    font-size:13px; max-width:calc(100vw - 16px); }
+  .switcher button, .switcher select { background:#333; color:#fff; border:0; border-radius:999px; padding:6px 10px; font:inherit; cursor:pointer; }
+  .switcher .label { min-width:190px; text-align:center; font-weight:600; }
+
+  /* ---------- A: gỗ cổ điển ---------- */
+  .a-wrap { max-width:640px; margin:0 auto; }
+  .a-player { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin:6px 0; background:#fff; opacity:.6; }
+  .a-player.active { opacity:1; box-shadow:inset 4px 0 0 #b5651d; font-weight:600; }
+  .a-plus { color:#c0392b; font-weight:700; animation:pop 1s ease-out forwards; }
+  .a-toast { min-height:44px; margin-top:8px; padding:10px 12px; border-radius:8px; background:#fde8e6; color:#922; font-size:14px; animation:fade 2.5s forwards; }
+  .a-toast:empty { visibility:hidden; animation:none; }
+  .a-fade { animation:shrink .45s ease-in forwards; transform-box:fill-box; transform-origin:center; }
+  .a-x { animation:fade 1.2s forwards; }
+  @keyframes shrink { to { opacity:0; transform:scale(.3); } }
+  @keyframes fade { 0%,60% { opacity:1; } 100% { opacity:0; } }
+  @keyframes pop { 0% { opacity:0; } 20% { opacity:1; } 100% { opacity:0; } }
+
+  /* ---------- B: phẳng, chạm hai lần ---------- */
+  .b-wrap { max-width:560px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  .b-turn { font-size:22px; font-weight:700; text-align:center; }
+  .b-confirm { font-size:20px; padding:16px; border-radius:14px; border:0; background:#2e7d32; color:#fff; font-weight:700; }
+  .b-confirm:disabled { background:#bbb; }
+  .b-card { padding:12px 14px; border-radius:12px; background:#fff3e0; border:2px solid #ef6c00; font-size:15px; line-height:1.4; }
+  .b-card b { color:#e65100; }
+  .b-bowls { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .b-bowl { background:#fff; border-radius:14px; padding:10px; min-height:84px; text-align:center; font-size:13px; }
+  .b-bowl .stones { display:flex; flex-wrap:wrap; gap:3px; justify-content:center; margin-top:6px; }
+  .b-bowl .s { width:14px; height:14px; border-radius:50%; border:1.5px solid #222; }
+  .b-fly { position:fixed; border-radius:50%; border:2px solid #222; pointer-events:none; z-index:40; }
+  .b-pulse { animation:bpulse 1s ease-in-out infinite; }
+  @keyframes bpulse { 50% { opacity:.35; } }
+
+  /* ---------- C: huấn luyện ---------- */
+  .c-wrap { display:grid; grid-template-columns:minmax(0,640px) 300px; gap:16px; justify-content:center; }
+  @media (max-width:900px) { .c-wrap { grid-template-columns:minmax(0,1fr); } }
+  .c-panel { background:#fff; border-radius:10px; padding:12px; font-size:14px; display:flex; flex-direction:column; gap:10px; }
+  .c-panel label { display:block; }
+  .c-log { list-style:none; margin:0; padding:0; max-height:340px; overflow:auto; border-top:1px solid #eee; }
+  .c-log li { padding:6px 2px; border-bottom:1px solid #f2f2f2; }
+  .c-log li.bad { color:#b71c1c; font-weight:600; }
+  .c-log li.cap { color:#1b5e20; font-weight:600; }
+  .c-log li.warn { color:#e65100; }
+  .c-shake { animation:shake .35s; }
+  .c-atari { animation:bpulse 1.1s ease-in-out infinite; }
+  @keyframes shake { 20%,60% { transform:translateX(-6px); } 40%,80% { transform:translateX(6px); } }
+</style>
+</head>
+<body>
+<div class="proto-note">PROTOTYPE, vứt đi: thử giao diện bàn cờ SVG. Dùng thanh dưới đáy để đổi biến thể, cỡ bàn và tình huống.</div>
+<div id="root"></div>
+<div class="switcher">
+  <button id="prev" title="Biến thể trước (←)">◀</button>
+  <span class="label" id="vlabel"></span>
+  <button id="next" title="Biến thể sau (→)">▶</button>
+  <select id="size"><option>9</option><option>13</option><option>19</option></select>
+  <select id="scenario">
+    <option value="empty">Bàn trống</option>
+    <option value="capture">Bắt quân</option>
+    <option value="ko">Ko</option>
+    <option value="suicide">Tự sát</option>
+  </select>
+  <button id="pass">Bỏ lượt</button>
+  <button id="reset">Làm lại</button>
+</div>
+<script>
+// ================= rules engine nháp =================
+const LETTERS = 'ABCDEFGHJKLMNOPQRST';
+const nb = (i, n) => { const x = i % n, y = (i / n) | 0, r = [];
+  if (x > 0) r.push(i - 1); if (x < n - 1) r.push(i + 1); if (y > 0) r.push(i - n); if (y < n - 1) r.push(i + n); return r; };
+function chainAt(b, n, i) {
+  const c = b[i], seen = new Set([i]), st = [i], libs = new Set();
+  while (st.length) { const j = st.pop();
+    for (const k of nb(j, n)) { if (b[k] === 0) libs.add(k); else if (b[k] === c && !seen.has(k)) { seen.add(k); st.push(k); } } }
+  return { stones: [...seen], libs: [...libs] };
+}
+function tryPlay(g, i) {
+  const { n, board, toMove } = g;
+  if (board[i]) return { illegal: 'occupied' };
+  const b = board.slice(); b[i] = toMove;
+  const captured = [];
+  for (const k of nb(i, n)) if (b[k] === 3 - toMove) {
+    const ch = chainAt(b, n, k);
+    if (!ch.libs.length) for (const s of ch.stones) { b[s] = 0; captured.push(s); }
+  }
+  if (!chainAt(b, n, i).libs.length) return { illegal: 'suicide' };
+  const key = b.join('');
+  if (g.seen.has(key)) return { illegal: 'superko' };
+  return { board: b, captured, key };
+}
+const REASON = {
+  occupied: 'Điểm này đã có quân.',
+  suicide: 'Tự sát: quân vừa đặt sẽ không còn khí nào, và nó không bắt được quân nào. Luật cấm nước này.',
+  superko: 'Nước ko: đánh ở đây sẽ lặp lại đúng thế cờ vừa có. Hãy đánh chỗ khác một nước, rồi mới được bắt lại.',
+};
+const COLOR = { 1: 'Đen', 2: 'Trắng' };
+const label = (i, n) => LETTERS[i % n] + (n - ((i / n) | 0));
+const stars = n => { const e = n < 13 ? 2 : 3, m = (n - 1) / 2, f = n - 1 - e;
+  const pts = n < 13 ? [[e,e],[f,e],[e,f],[f,f],[m,m]] : [[e,e],[m,e],[f,e],[e,m],[m,m],[f,m],[e,f],[m,f],[f,f]];
+  return pts.map(([x, y]) => y * n + x); };
+
+const SCENARIOS = {
+  empty: { stones: [], toMove: 1 },
+  // Đen đánh C6 bắt 1 quân; đánh G6 bắt 2 quân
+  capture: { toMove: 1, stones: [[1,1,2],[1,3,2],[1,2,1],[2,2,2],  [1,4,2],[1,7,2],[1,5,1],[1,6,1],[1,5,3],[2,5,2],[2,6,2]] },
+  // Đen đánh D7 bắt ko; Trắng không được bắt lại ngay ở C7
+  ko: { toMove: 1, stones: [[1,1,2],[1,2,1],[1,2,3],[2,2,2],[2,3,1],[2,3,3],[2,4,2]] },
+  // Đen đánh G3 là tự sát; đánh A9 (góc) cũng tự sát
+  suicide: { toMove: 1, stones: [[2,6,5],[2,5,6],[2,7,6],[2,6,7],[2,1,0],[2,0,1]] },
+};
+function newGame(n, sc) {
+  const board = new Array(n * n).fill(0);
+  for (const [c, x, y] of SCENARIOS[sc].stones) board[y * n + x] = c;
+  return { n, board, toMove: SCENARIOS[sc].toMove, caps: { 1: 0, 2: 0 }, seen: new Set([board.join('')]),
+    last: -1, moveNo: 0, nums: new Array(n * n).fill(0), log: [] };
+}
+function apply(g, i) {
+  const r = tryPlay(g, i), who = g.toMove;
+  if (r.illegal) return { type: 'illegal', i, reason: r.illegal };  // nhật ký chỉ ghi các bước thật sự
+  g.board = r.board; g.seen.add(r.key); g.caps[who] += r.captured.length; g.last = i;
+  g.nums[i] = ++g.moveNo; for (const s of r.captured) g.nums[s] = 0;
+  g.toMove = 3 - who;
+  g.log.unshift({ cls: '', t: `${g.moveNo}. ${COLOR[who]} đánh ${label(i, g.n)}` });
+  if (r.captured.length) g.log.unshift({ cls: 'cap', t: `${COLOR[who]} bắt ${r.captured.length} quân ${COLOR[3 - who]}!` });
+  return { type: 'play', i, color: who, captured: r.captured };
+}
+function pass(g) { g.log.unshift({ cls: '', t: `${COLOR[g.toMove]} bỏ lượt` }); g.toMove = 3 - g.toMove; g.last = -1; }
+
+// ================= helper hình học dùng chung =================
+const U = 40;
+const P = i => [((i % G.n) + 1) * U, (((i / G.n) | 0) + 1) * U];
+function grid(n, stroke, sw) {
+  let s = '';
+  for (let k = 0; k < n; k++) {
+    s += `<line x1="${U}" y1="${(k+1)*U}" x2="${n*U}" y2="${(k+1)*U}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    s += `<line x1="${(k+1)*U}" y1="${U}" x2="${(k+1)*U}" y2="${n*U}" stroke="${stroke}" stroke-width="${sw}"/>`;
+  }
+  for (const i of stars(n)) { const [x, y] = P(i); s += `<circle cx="${x}" cy="${y}" r="${U*.09}" fill="${stroke}"/>`; }
+  return s;
+}
+function pointFromEvent(svg, e) {
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const x = Math.round(p.x / U) - 1, y = Math.round(p.y / U) - 1;
+  return x < 0 || y < 0 || x >= G.n || y >= G.n ? -1 : y * G.n + x;
+}
+
+// ================= Biến thể A: gỗ cổ điển, đặt ngay =================
+const A = { name: 'Gỗ cổ điển, đặt ngay', render(root, ev) {
+  const n = G.n, S = (n + 1) * U;
+  let s = `<svg viewBox="0 0 ${S} ${S}"><defs>
+    <radialGradient id="ab" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#666"/><stop offset="1" stop-color="#000"/></radialGradient>
+    <radialGradient id="aw" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#c9c9c9"/></radialGradient>
+    <filter id="ash"><feDropShadow dx="1.5" dy="2" stdDeviation="1.2" flood-opacity=".45"/></filter></defs>
+    <rect width="${S}" height="${S}" rx="6" fill="#dcb35c"/>` + grid(n, '#3b2a14', 1);
+  for (let k = 0; k < n; k++) {
+    s += `<text x="${(k+1)*U}" y="${U*.55}" font-size="${U*.32}" text-anchor="middle" fill="#5b4220">${LETTERS[k]}</text>`;
+    s += `<text x="${U*.45}" y="${(k+1)*U + U*.11}" font-size="${U*.32}" text-anchor="middle" fill="#5b4220">${n-k}</text>`;
+  }
+  G.board.forEach((c, i) => { if (!c) return; const [x, y] = P(i);
+    s += `<circle cx="${x}" cy="${y}" r="${U*.47}" fill="url(#${c===1?'ab':'aw'})" filter="url(#ash)"/>`; });
+  if (G.last >= 0) { const [x, y] = P(G.last);
+    s += `<circle cx="${x}" cy="${y}" r="${U*.17}" fill="none" stroke="${G.board[G.last]===1?'#fff':'#000'}" stroke-width="2.5"/>`; }
+  if (ev?.type === 'play') for (const i of ev.captured) { const [x, y] = P(i);
+    s += `<circle class="a-fade" cx="${x}" cy="${y}" r="${U*.47}" fill="url(#${ev.color===1?'aw':'ab'})"/>`; }
+  if (ev?.type === 'illegal') { const [x, y] = P(ev.i), d = U*.3;
+    s += `<g class="a-x" stroke="#d32f2f" stroke-width="5" stroke-linecap="round"><line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}"/><line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}"/></g>`; }
+  s += `<circle id="ghost" r="${U*.47}" opacity="0" pointer-events="none"/></svg>`;
+  const plus = c => ev?.type === 'play' && ev.color === c && ev.captured.length ? ` <span class="a-plus">+${ev.captured.length}</span>` : '';
+  const bar = c => `<div class="a-player ${G.toMove===c?'active':''}"><span>${c===1?'⚫ Đen':'⚪ Trắng'}${G.toMove===c?' · đến lượt':''}</span><span>Bắt: ${G.caps[c]}${plus(c)}</span></div>`;
+  root.innerHTML = `<div class="a-wrap">${bar(2)}${s}${bar(1)}<div class="a-toast">${ev?.type==='illegal' ? '✕ ' + REASON[ev.reason] : ''}</div></div>`;
+  const svg = root.querySelector('svg'), ghost = svg.querySelector('#ghost');
+  svg.addEventListener('mousemove', e => { const i = pointFromEvent(svg, e);
+    if (i < 0 || G.board[i]) { ghost.setAttribute('opacity', 0); return; }
+    const [x, y] = P(i); ghost.setAttribute('cx', x); ghost.setAttribute('cy', y);
+    ghost.setAttribute('fill', G.toMove === 1 ? '#000' : '#fff'); ghost.setAttribute('opacity', .45); });
+  svg.addEventListener('mouseleave', () => ghost.setAttribute('opacity', 0));
+  svg.addEventListener('click', e => { const i = pointFromEvent(svg, e); if (i >= 0) act(i); });
+} };
+
+// ================= Biến thể B: phẳng, chạm hai lần, chén đựng quân =================
+const B = { name: 'Phẳng, chạm hai lần', preview: -1, render(root, ev) {
+  const n = G.n, S = (n + 1) * U, me = this;
+  if (ev) me.preview = -1;
+  const pre = me.preview >= 0 ? tryPlay(G, me.preview) : null;
+  let s = `<svg viewBox="0 0 ${S} ${S}"><rect width="${S}" height="${S}" rx="18" fill="#f3e3c3"/>` + grid(n, '#7a6a50', 1.6);
+  if (me.preview >= 0) { const [x, y] = P(me.preview), col = pre.illegal ? '#e53935' : '#1e88e5';
+    s += `<line x1="${U}" y1="${y}" x2="${n*U}" y2="${y}" stroke="${col}" stroke-width="2" opacity=".5"/><line x1="${x}" y1="${U}" x2="${x}" y2="${n*U}" stroke="${col}" stroke-width="2" opacity=".5"/>`; }
+  G.board.forEach((c, i) => { if (!c) return; const [x, y] = P(i);
+    s += `<circle cx="${x}" cy="${y}" r="${U*.45}" fill="${c===1?'#222':'#fafafa'}" stroke="#222" stroke-width="2"/>`; });
+  if (G.last >= 0) { const [x, y] = P(G.last);
+    s += `<rect x="${x-U*.13}" y="${y-U*.13}" width="${U*.26}" height="${U*.26}" fill="#e53935"/>`; }
+  if (pre) { const [x, y] = P(me.preview);
+    if (pre.illegal) s += `<circle cx="${x}" cy="${y}" r="${U*.45}" fill="none" stroke="#e53935" stroke-width="4" stroke-dasharray="6 4"/>
+      <text x="${x}" y="${y+U*.18}" font-size="${U*.55}" text-anchor="middle" fill="#e53935" font-weight="700">!</text>`;
+    else { s += `<circle cx="${x}" cy="${y}" r="${U*.45}" fill="${G.toMove===1?'#222':'#fafafa'}" stroke="#1e88e5" stroke-width="3" opacity=".7"/>`;
+      for (const k of pre.captured) { const [cx, cy] = P(k);
+        s += `<circle class="b-pulse" cx="${cx}" cy="${cy}" r="${U*.45}" fill="none" stroke="#e53935" stroke-width="4"/>`; } } }
+  s += '</svg>';
+  let card = '';
+  if (pre?.illegal) card = `<div class="b-card"><b>Không đánh được ${label(me.preview, n)}.</b> ${REASON[pre.illegal]}</div>`;
+  else if (pre?.captured.length) card = `<div class="b-card" style="border-color:#2e7d32;background:#e8f5e9">Đánh ${label(me.preview, n)} sẽ <b style="color:#2e7d32">bắt ${pre.captured.length} quân</b> (viền đỏ nhấp nháy).</div>`;
+  else if (ev?.type === 'illegal') card = `<div class="b-card"><b>Không đánh được.</b> ${REASON[ev.reason]}</div>`;
+  const bowl = c => `<div class="b-bowl" id="bowl${c}">Chén của ${COLOR[c]}: đã bắt <b>${G.caps[c]}</b>
+    <div class="stones">${'<span class="s" style="background:' + (c===1?'#fafafa':'#222') + '"></span>'.repeat(Math.min(G.caps[c], 40))}</div></div>`;
+  root.innerHTML = `<div class="b-wrap"><div class="b-turn">${G.toMove===1?'⚫ Đen':'⚪ Trắng'} đi</div>${s}${card}
+    <button class="b-confirm" ${pre && !pre.illegal ? '' : 'disabled'}>${me.preview>=0 ? 'Đặt quân ở ' + label(me.preview, n) : 'Chạm vào bàn để chọn điểm'}</button>
+    <div class="b-bowls">${bowl(1)}${bowl(2)}</div></div>`;
+  const svg = root.querySelector('svg');
+  svg.addEventListener('click', e => { const i = pointFromEvent(svg, e); if (i < 0) return;
+    if (i === me.preview && !pre.illegal) act(i); else { me.preview = i; me.render(root, null); } });
+  root.querySelector('.b-confirm').addEventListener('click', () => act(me.preview));
+  if (ev?.type === 'play' && ev.captured.length) {   // quân bị bắt bay vào chén
+    const m = svg.getScreenCTM(), dst = root.querySelector('#bowl' + ev.color).getBoundingClientRect(), r = U * .45 * m.a;
+    ev.captured.forEach((k, j) => { const [x, y] = P(k), sx = m.a * x + m.e - r, sy = m.d * y + m.f - r;
+      const f = document.createElement('div'); f.className = 'b-fly';
+      Object.assign(f.style, { left: sx + 'px', top: sy + 'px', width: 2*r + 'px', height: 2*r + 'px', background: ev.color===1?'#fafafa':'#222' });
+      document.body.appendChild(f);
+      f.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${dst.left + dst.width/2 - sx - r}px,${dst.top + 40 - sy - r}px) scale(.3)`, opacity: .2 }],
+        { duration: 700, delay: j * 80, easing: 'ease-in', fill: 'forwards' }).onfinish = () => f.remove(); });
+  }
+} };
+
+// ================= Biến thể C: huấn luyện, overlay dự báo + nhật ký =================
+const C = { name: 'Huấn luyện, có nhật ký', opt: { libs: false, nums: false, forbid: true }, render(root, ev) {
+  const n = G.n, S = (n + 1) * U, o = this.opt, me = this;
+  let s = `<svg viewBox="0 0 ${S} ${S}" class="${ev?.type==='illegal'?'c-shake':''}"><rect width="${S}" height="${S}" fill="#e8c88a"/>` + grid(n, '#2b2b2b', 1.2);
+  if (ev?.type === 'play') for (const i of ev.captured) { const [x, y] = P(i);  // bóng mờ quân vừa bị bắt
+    s += `<circle cx="${x}" cy="${y}" r="${U*.44}" fill="none" stroke="${ev.color===1?'#fff':'#000'}" stroke-width="2" stroke-dasharray="4 4" opacity=".8"/>`; }
+  const done = new Set(), atari = [];
+  G.board.forEach((c, i) => { if (!c || done.has(i)) return; const ch = chainAt(G.board, n, i);
+    ch.stones.forEach(k => done.add(k)); ch.c = c; if (ch.libs.length === 1) atari.push(ch);
+    for (const k of ch.stones) { const [x, y] = P(k);
+      s += `<circle cx="${x}" cy="${y}" r="${U*.46}" fill="${c===1?'#111':'#f7f7f7'}" stroke="#000" stroke-width="1"/>`;
+      const txt = o.nums && G.nums[k] ? G.nums[k] : o.libs ? ch.libs.length : '';
+      if (txt !== '') s += `<text x="${x}" y="${y+U*.13}" font-size="${U*.36}" text-anchor="middle" fill="${c===1?'#fff':'#000'}">${txt}</text>`; } });
+  for (const ch of atari) {
+    for (const k of ch.stones) { const [x, y] = P(k); s += `<circle class="c-atari" cx="${x}" cy="${y}" r="${U*.5}" fill="none" stroke="#ff6d00" stroke-width="4"/>`; }
+    const [x, y] = P(ch.libs[0]); s += `<circle cx="${x}" cy="${y}" r="${U*.16}" fill="#ff6d00"/>`;
+  }
+  if (o.forbid) G.board.forEach((c, i) => { if (c) return; const r = tryPlay(G, i); if (!r.illegal) return;
+    const [x, y] = P(i), d = U * .14;
+    s += `<g stroke="#c62828" stroke-width="2.5" opacity=".75"><line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}"/><line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}"/></g>`;
+    if (r.illegal === 'superko') s += `<text x="${x}" y="${y-U*.22}" font-size="${U*.28}" text-anchor="middle" fill="#c62828" font-weight="700">ko</text>`; });
+  if (G.last >= 0) { const [x, y] = P(G.last); s += `<circle cx="${x}" cy="${y}" r="${U*.12}" fill="#e53935"/>`; }
+  s += '</svg>';
+  const warn = atari.map(ch => `<li class="warn">Nhóm ${COLOR[ch.c]} ở ${label(ch.stones[0], n)} chỉ còn 1 khí (${label(ch.libs[0], n)})</li>`).join('');
+  root.innerHTML = `<div class="c-wrap"><div>${s}</div><div class="c-panel">
+    <div style="font-size:18px;font-weight:700">${G.toMove===1?'⚫ Đen':'⚪ Trắng'} đi · Bắt: Đen ${G.caps[1]}, Trắng ${G.caps[2]}</div>
+    <label><input type="checkbox" data-k="forbid" ${o.forbid?'checked':''}> Đánh dấu điểm cấm (✕, ko)</label>
+    <label><input type="checkbox" data-k="libs" ${o.libs?'checked':''}> Hiện số khí trên quân</label>
+    <label><input type="checkbox" data-k="nums" ${o.nums?'checked':''}> Hiện số thứ tự nước</label>
+    <ul class="c-log">${warn}${G.log.map(l => `<li class="${l.cls}">${l.t}</li>`).join('')}</ul></div></div>`;
+  const svg = root.querySelector('svg');
+  svg.addEventListener('click', e => { const i = pointFromEvent(svg, e); if (i >= 0) act(i); });
+  root.querySelectorAll('input[data-k]').forEach(cb => cb.addEventListener('change', () => { o[cb.dataset.k] = cb.checked; me.render(root, null); }));
+} };
+
+// ================= Biến thể D: kết hợp. Chuột = A, cảm ứng = B, luôn có nhật ký của C =================
+const D = { name: 'Kết hợp A/B + nhật ký C', preview: -1, opt: { input: 'auto', atari: true, forbid: true }, render(root, ev) {
+  const n = G.n, S = (n + 1) * U, me = this, o = me.opt;
+  const touch = o.input === 'touch' || (o.input === 'auto' && matchMedia('(pointer: coarse)').matches);
+  if (ev || !touch) me.preview = -1;
+  const pre = me.preview >= 0 ? tryPlay(G, me.preview) : null;
+  let s = `<svg viewBox="0 0 ${S} ${S}"><defs>
+    <radialGradient id="db" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#666"/><stop offset="1" stop-color="#000"/></radialGradient>
+    <radialGradient id="dw" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#c9c9c9"/></radialGradient>
+    <filter id="dsh"><feDropShadow dx="1.5" dy="2" stdDeviation="1.2" flood-opacity=".45"/></filter></defs>
+    <rect width="${S}" height="${S}" rx="6" fill="#dcb35c"/>` + grid(n, '#3b2a14', 1);
+  for (let k = 0; k < n; k++) {
+    s += `<text x="${(k+1)*U}" y="${U*.55}" font-size="${U*.32}" text-anchor="middle" fill="#5b4220">${LETTERS[k]}</text>`;
+    s += `<text x="${U*.45}" y="${(k+1)*U + U*.11}" font-size="${U*.32}" text-anchor="middle" fill="#5b4220">${n-k}</text>`;
+  }
+  if (pre) { const [x, y] = P(me.preview), col = pre.illegal ? '#e53935' : '#1e88e5';
+    s += `<line x1="${U}" y1="${y}" x2="${n*U}" y2="${y}" stroke="${col}" stroke-width="2" opacity=".5"/><line x1="${x}" y1="${U}" x2="${x}" y2="${n*U}" stroke="${col}" stroke-width="2" opacity=".5"/>`; }
+  const done = new Set(), atari = [];
+  G.board.forEach((c, i) => { if (!c) return; const [x, y] = P(i);
+    s += `<circle cx="${x}" cy="${y}" r="${U*.47}" fill="url(#${c===1?'db':'dw'})" filter="url(#dsh)"/>`;
+    if (done.has(i)) return; const ch = chainAt(G.board, n, i); ch.stones.forEach(k => done.add(k)); ch.c = c;
+    if (ch.libs.length === 1) atari.push(ch); });
+  if (G.last >= 0) { const [x, y] = P(G.last);
+    s += `<circle cx="${x}" cy="${y}" r="${U*.17}" fill="none" stroke="${G.board[G.last]===1?'#fff':'#000'}" stroke-width="2.5"/>`; }
+  if (ev?.type === 'play') for (const i of ev.captured) { const [x, y] = P(i);
+    s += `<circle class="a-fade" cx="${x}" cy="${y}" r="${U*.47}" fill="url(#${ev.color===1?'dw':'db'})"/>`; }
+  if (o.atari) for (const ch of atari) {
+    for (const k of ch.stones) { const [x, y] = P(k); s += `<circle class="c-atari" cx="${x}" cy="${y}" r="${U*.5}" fill="none" stroke="#ff6d00" stroke-width="4"/>`; }
+    const [x, y] = P(ch.libs[0]); s += `<circle cx="${x}" cy="${y}" r="${U*.16}" fill="#ff6d00"/>`;
+  }
+  if (o.forbid) G.board.forEach((c, i) => { if (c) return; const r = tryPlay(G, i); if (!r.illegal) return;
+    const [x, y] = P(i), d = U * .14;
+    s += `<g stroke="#c62828" stroke-width="2.5" opacity=".75"><line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}"/><line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}"/></g>`;
+    if (r.illegal === 'superko') s += `<text x="${x}" y="${y-U*.22}" font-size="${U*.28}" text-anchor="middle" fill="#c62828" font-weight="700">ko</text>`; });
+  if (ev?.type === 'illegal') { const [x, y] = P(ev.i), d = U*.3;
+    s += `<g class="a-x" stroke="#d32f2f" stroke-width="5" stroke-linecap="round"><line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}"/><line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}"/></g>`; }
+  if (pre) { const [x, y] = P(me.preview);
+    if (pre.illegal) s += `<circle cx="${x}" cy="${y}" r="${U*.45}" fill="none" stroke="#e53935" stroke-width="4" stroke-dasharray="6 4"/>
+      <text x="${x}" y="${y+U*.18}" font-size="${U*.55}" text-anchor="middle" fill="#e53935" font-weight="700">!</text>`;
+    else { s += `<circle cx="${x}" cy="${y}" r="${U*.47}" fill="url(#${G.toMove===1?'db':'dw'})" stroke="#1e88e5" stroke-width="3" opacity=".7"/>`;
+      for (const k of pre.captured) { const [cx, cy] = P(k);
+        s += `<circle class="b-pulse" cx="${cx}" cy="${cy}" r="${U*.47}" fill="none" stroke="#e53935" stroke-width="4"/>`; } } }
+  s += `<circle id="ghost" r="${U*.47}" opacity="0" pointer-events="none"/></svg>`;
+  let touchUi = '';
+  if (touch) {
+    let card = '';
+    if (pre?.illegal) card = `<div class="b-card"><b>Không đánh được ${label(me.preview, n)}.</b> ${REASON[pre.illegal]}</div>`;
+    else if (pre?.captured.length) card = `<div class="b-card" style="border-color:#2e7d32;background:#e8f5e9">Đánh ${label(me.preview, n)} sẽ <b style="color:#2e7d32">bắt ${pre.captured.length} quân</b>.</div>`;
+    touchUi = `${card}<button class="b-confirm" style="width:100%;margin-top:10px" ${pre && !pre.illegal ? '' : 'disabled'}>${me.preview>=0 ? 'Đặt quân ở ' + label(me.preview, n) : 'Chạm vào bàn để chọn điểm'}</button>`;
+  } else if (ev?.type === 'illegal') touchUi = `<div class="a-toast">✕ ${REASON[ev.reason]}</div>`;
+  const plus = c => ev?.type === 'play' && ev.color === c && ev.captured.length ? ` <span class="a-plus">+${ev.captured.length}</span>` : '';
+  const warn = o.atari ? atari.map(ch => `<li class="warn">Nhóm ${COLOR[ch.c]} ở ${label(ch.stones[0], n)} chỉ còn 1 khí (${label(ch.libs[0], n)})</li>`).join('') : '';
+  root.innerHTML = `<div class="c-wrap"><div>${s}${touchUi}</div><div class="c-panel">
+    <div style="font-size:18px;font-weight:700">${G.toMove===1?'⚫ Đen':'⚪ Trắng'} đi</div>
+    <div>Bắt: ⚫ Đen ${G.caps[1]}${plus(1)} · ⚪ Trắng ${G.caps[2]}${plus(2)}</div>
+    <label>Cách nhập: <select data-k="input">
+      <option value="auto" ${o.input==='auto'?'selected':''}>Tự động (đang: ${touch?'cảm ứng':'chuột'})</option>
+      <option value="mouse" ${o.input==='mouse'?'selected':''}>Chuột: bấm là đặt</option>
+      <option value="touch" ${o.input==='touch'?'selected':''}>Cảm ứng: chạm hai lần</option></select></label>
+    <label><input type="checkbox" data-k="atari" ${o.atari?'checked':''}> Cảnh báo nhóm còn 1 khí</label>
+    <label><input type="checkbox" data-k="forbid" ${o.forbid?'checked':''}> Đánh dấu điểm cấm (✕, ko)</label>
+    ${warn ? `<ul class="c-log" style="border:0">${warn}</ul>` : ''}
+    <div style="font-weight:600">Nhật ký</div>
+    <ul class="c-log">${G.log.map(l => `<li class="${l.cls}">${l.t}</li>`).join('')}</ul></div></div>`;
+  const svg = root.querySelector('svg'), ghost = svg.querySelector('#ghost');
+  if (touch) {
+    svg.addEventListener('click', e => { const i = pointFromEvent(svg, e); if (i < 0 || G.board[i]) return;  // điểm có quân: im lặng
+      if (i === me.preview && !pre.illegal) act(i); else { me.preview = i; me.render(root, null); } });
+    root.querySelector('.b-confirm').addEventListener('click', () => act(me.preview));
+  } else {
+    svg.addEventListener('mousemove', e => { const i = pointFromEvent(svg, e);
+      if (i < 0 || G.board[i]) { ghost.setAttribute('opacity', 0); return; }
+      const [x, y] = P(i); ghost.setAttribute('cx', x); ghost.setAttribute('cy', y);
+      ghost.setAttribute('fill', G.toMove === 1 ? '#000' : '#fff'); ghost.setAttribute('opacity', .45); });
+    svg.addEventListener('mouseleave', () => ghost.setAttribute('opacity', 0));
+    svg.addEventListener('click', e => { const i = pointFromEvent(svg, e); if (i >= 0 && !G.board[i]) act(i); });  // điểm có quân: im lặng
+  }
+  root.querySelector('select[data-k]').addEventListener('change', e => { o.input = e.target.value; me.render(root, null); });
+  root.querySelectorAll('input[data-k]').forEach(cb => cb.addEventListener('change', () => { o[cb.dataset.k] = cb.checked; me.render(root, null); }));
+} };
+
+// ================= wiring =================
+const VARIANTS = { A, B, C, D }, KEYS = Object.keys(VARIANTS), root = document.getElementById('root');
+const qs = new URLSearchParams(location.search);
+let cur = KEYS.includes(qs.get("variant")) ? qs.get("variant") : "D";
+let G = newGame(+(qs.get('size') || 9), qs.get('scenario') || 'capture');
+document.getElementById('size').value = G.n; document.getElementById('scenario').value = qs.get('scenario') || 'capture';
+function sync() { const p = new URLSearchParams({ variant: cur, size: G.n, scenario: document.getElementById('scenario').value });
+  history.replaceState(null, '', '?' + p); document.getElementById('vlabel').textContent = `${cur} · ${VARIANTS[cur].name}`; }
+function draw(ev) { sync(); VARIANTS[cur].render(root, ev); }
+function act(i) { draw(apply(G, i)); }
+function cycle(d) { cur = KEYS[(KEYS.indexOf(cur) + d + KEYS.length) % KEYS.length]; B.preview = D.preview = -1; draw(null); }
+function restart() { G = newGame(+document.getElementById('size').value, document.getElementById('scenario').value); B.preview = D.preview = -1; draw(null); }
+document.getElementById('prev').onclick = () => cycle(-1);
+document.getElementById('next').onclick = () => cycle(1);
+document.getElementById('size').onchange = restart;
+document.getElementById('scenario').onchange = restart;
+document.getElementById('reset').onclick = restart;
+document.getElementById('pass').onclick = () => { pass(G); B.preview = D.preview = -1; draw(null); };
+addEventListener('keydown', e => { if (e.target.closest('input,textarea,select,[contenteditable]')) return;
+  if (e.key === 'ArrowLeft') cycle(-1); if (e.key === 'ArrowRight') cycle(1); });
+draw(null);
+</script>
+</body>
+</html>
