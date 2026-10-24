@@ -74,6 +74,10 @@ _Avoid_: Result (on its own), outcome, winner
 A drawn Game, possible only when Komi is a whole number.
 _Avoid_: Draw, tie
 
+**Saved game**:
+The one unfinished Game kept per opponent kind (AI or two players on one device) so the learner can resume it; it is discarded when the Game is Finished.
+_Avoid_: Save slot, history, archive
+
 ### Learning
 
 **Lesson**:
@@ -123,3 +127,11 @@ _Avoid_: Punishment, counter
 **Attempt**:
 One try at a Tsumego, from its starting Position until it is Solved or Failed. Illegal moves do not end an Attempt.
 _Avoid_: Try, session, run
+
+**Tsumego record**:
+The learner's best standing on one Tsumego (Not tried, Tried, Answer viewed, Solved, Solved first try) and how many Attempts they have made. A record's standing never goes down.
+_Avoid_: Score, stats, progress (on its own)
+
+**Lesson record**:
+The learner's standing on one Lesson: whether it is completed, the best outcome of each Practice, and any unfinished Lesson run.
+_Avoid_: Lesson progress, save
