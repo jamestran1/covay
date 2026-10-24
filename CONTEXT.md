@@ -80,6 +80,26 @@ _Avoid_: Draw, tie
 A guided, interactive sequence of steps that teaches one rule or concept.
 _Avoid_: Tutorial, course
 
+**Step**:
+One unit of a Lesson, of one of three kinds: Explanation, Demonstration or Practice. A Lesson's Steps run in a fixed linear order.
+_Avoid_: Slide, page, stage
+
+**Explanation**:
+A Step showing a Position with text and marks; the learner simply moves on.
+_Avoid_: Info step
+
+**Demonstration**:
+A Step that plays a fixed sequence of Moves, one per learner click, each with an optional comment.
+_Avoid_: Animation, replay
+
+**Practice**:
+A Step where the learner must play on a Position, checked against a Solution tree through an Attempt, exactly as a Tsumego is; it must be Solved, or its answer viewed, before the Lesson moves on.
+_Avoid_: Exercise, quiz, task
+
+**Lesson run**:
+An immutable record of one learner's progress through a Lesson: the current Step, the Attempt of the current Practice, and the outcome of each Practice so far.
+_Avoid_: Lesson state, session
+
 **Tsumego**:
 A life-and-death problem: a fixed position where the learner must find the correct sequence of moves.
 _Avoid_: Puzzle, problem, exercise
@@ -87,6 +107,10 @@ _Avoid_: Puzzle, problem, exercise
 **Goal**:
 What the learner must achieve in a Tsumego: Live, Kill or Capture.
 _Avoid_: Objective, task
+
+**Difficulty**:
+A Tsumego's level from 1 to 5, set by its author against the published authoring scale.
+_Avoid_: Level, rank, grade
 
 **Solution tree**:
 The authored tree of a Tsumego's Moves, alternating learner and opponent, whose leaves are marked Correct or Wrong. Any Move outside the tree is wrong.
