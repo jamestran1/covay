@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Benchmark KataGo TF.js</title>
+  </head>
+  <body>
+    <main>
+      <h1>Benchmark KataGo trên trình duyệt</h1>
+      <p class="lead">
+        Đo thời gian một lượt suy luận (policy + ownership, không tìm kiếm MCTS) của mạng
+        <code>g170-b6c96</code> bằng TensorFlow.js, với WebGPU và WASM, trên bàn 9x9 và 19x19.
+        Trang không gửi dữ liệu đi đâu cả.
+      </p>
+
+      <label class="field">
+        <span>Tên máy (ví dụ Samsung A54)</span>
+        <input id="device-name" type="text" autocomplete="off" placeholder="Samsung A54" />
+      </label>
+
+      <button id="run" type="button" class="primary">Chạy benchmark</button>
+
+      <div id="progress-box" hidden>
+        <progress id="progress" max="1" value="0"></progress>
+        <p id="status" aria-live="polite"></p>
+      </div>
+
+      <section id="results" hidden>
+        <h2>Kết quả</h2>
+        <div class="scroll"><table id="timing"></table></div>
+        <div class="scroll"><table id="loading"></table></div>
+        <h2>Kiểm tra hợp lý</h2>
+        <div id="sanity"></div>
+        <h2>Môi trường</h2>
+        <ul id="env"></ul>
+        <div class="actions">
+          <button id="copy" type="button" class="primary">Copy kết quả</button>
+          <a href="https://github.com/jamestran1/covay/issues/14" target="_blank" rel="noopener">Mở ticket để dán kết quả</a>
+        </div>
+        <p id="copy-status" aria-live="polite"></p>
+        <textarea id="markdown" readonly rows="10" aria-label="Kết quả dạng Markdown"></textarea>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

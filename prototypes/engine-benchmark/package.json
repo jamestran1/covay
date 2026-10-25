@@ -1,0 +1,22 @@
+{
+  "name": "covay-engine-benchmark",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Throwaway spike: KataGo g170-b6c96 forward pass speed with TensorFlow.js (issue #14).",
+  "scripts": {
+    "prepare-assets": "node scripts/prepare-assets.mjs",
+    "dev": "pnpm prepare-assets && vite",
+    "build": "pnpm prepare-assets && tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-backend-wasm": "4.22.0",
+    "@tensorflow/tfjs-backend-webgpu": "4.22.0",
+    "@tensorflow/tfjs-core": "4.22.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5"
+  }
+}
