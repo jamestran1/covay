@@ -104,6 +104,14 @@ _Avoid_: Exercise, quiz, task
 An immutable record of one learner's progress through a Lesson: the current Step, the Attempt of the current Practice, and the outcome of each Practice so far.
 _Avoid_: Lesson state, session
 
+**Learning path**:
+The fixed order in which the Lessons are meant to be taken, with Drills placed between them. Nothing on it is locked.
+_Avoid_: Curriculum, course, roadmap
+
+**Drill**:
+A fixed list of Tsumego placed after a Lesson on the Learning path; it is done when every Tsumego in it is Solved. Not every Lesson has one.
+_Avoid_: Station, checkpoint, practice (that is a Step), exercise
+
 **Tsumego**:
 A life-and-death problem: a fixed position where the learner must find the correct sequence of moves.
 _Avoid_: Puzzle, problem, exercise
